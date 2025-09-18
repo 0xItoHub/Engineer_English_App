@@ -1,0 +1,8 @@
+# Pin versions as needed
+Django>=5.0
+djangorestframework>=3.15
+channels>=4.0
+django-cors-headers>=4.3.0
+uvicorn>=0.29  # for ASGI dev server
+psycopg2-binary>=2.9  # swap to pg8000 on AWS Lambda/App Runner if desired
+mangum>=0.17.0 

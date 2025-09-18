@@ -1,0 +1,25 @@
+FROM public.ecr.aws/lambda/python:3.12
+
+WORKDIR /var/task
+
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+# ソースを配置
+COPY . .
+
+# まずは seed_db をイメージ内に生成
+ENV DJANGO_SETTINGS_MODULE=engineer_english.settings \
+    SQLITE_PATH=/var/task/seed_db.sqlite3 \
+    PYTHONUNBUFFERED=1
+
+RUN python manage.py migrate --noinput || true \
+ && python manage.py collectstatic --noinput || true \
+ && (python manage.py seed_six_scenes || true)
+
+# ランタイムでは /tmp を使う
+ENV SQLITE_PATH=/tmp/db.sqlite3 \
+    STARTUP_COPY_SEED_DB=1
+
+# Lambda エントリ
+CMD ["lambda.handler"] 

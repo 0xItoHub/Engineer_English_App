@@ -1,0 +1,231 @@
+{% load static %}
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Engineer English App</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Cormorant+Garamond:ital,wght@1,600&display=swap" rel="stylesheet" />
+  <link rel="icon" href="https://d2w237yrqesgsh.cloudfront.net/favicon001.ico">
+  <style>
+    :root {
+      --primary: #0A1A2F;
+      --text: #0d1117;
+      --muted: #6b7280;
+      --card: #ffffff;
+      --bg: #f6f7fb;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); }
+    header { background: #e9ecef; color: var(--text); padding: 24px 16px; border-bottom: 1px solid #e5e7eb; }
+    .container { width: min(1100px, 94vw); margin: 0 auto; }
+    .brand { font-size: 28px; font-weight: 600; letter-spacing: .5px; font-family: 'Cormorant Garamond','Playfair Display',serif; font-style: italic; }
+    .copy { font-family: 'Cormorant Garamond', serif; font-style: italic; opacity: .9; }
+    .hero { position: relative; overflow: hidden; background: #0a1a2f url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="800" height="400"><text x="20" y="60" fill="%2358a6ff" opacity="0.08" font-family="monospace">code • learn • ship</text></svg>') no-repeat right/contain; color:#fff; border-radius: 0; padding: 28px; margin-top: 18px; }
+    .hero h1 { margin: 0 0 8px 0; font-size: 28px; }
+    .hero p { margin: 0; color: #dbeafe; }
+    .hero-content { position: relative; z-index: 1; }
+
+    /* カルーセル */
+    .carousel { position: relative; height: 320px; border-radius: 0; overflow: hidden; margin: 16px 0 8px; background: #e9ecef; }
+    .carousel-track { display: flex; width: 200%; animation: slide 45s linear infinite; }
+    .carousel img { width: calc(100% / 6); height: 320px; object-fit: cover; }
+    @keyframes slide { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+
+    .cards { display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; margin: 24px 0; }
+    .card { grid-column: span 12; background: var(--card); border: 1px solid #e5e7eb; border-radius: 0; padding: 18px; }
+    @media (min-width: 768px) { .card--3 { grid-column: span 4; } }
+    .kpi { font-size: 28px; font-weight: 700; }
+    .muted { color: var(--muted); }
+    .cta { display: inline-block; background: #3c5aa6; color: #fff; padding: 10px 16px; border-radius: 0; text-decoration: none; font-weight: 600; }
+    .cta:hover { background: #0A1A2F; }
+    .links a { color: var(--primary); text-decoration: none; }
+    .links a:hover { text-decoration: underline; }
+    .list { margin: 8px 0 0; padding-left: 18px; }
+
+    /* 開発者体験セクション */
+    .devxp { background: #ffffff; border: 1px solid #e5e7eb; padding: 24px; }
+    .devxp h3 { margin: 0 0 16px 0; font-size: 20px; font-weight: 700; }
+    .devxp .sub { color: var(--muted); margin-bottom: 14px; }
+    .stack-badges { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 20px; }
+    .badge { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; font-size: 13px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 4px; }
+    .badge code { background: none; padding: 0; }
+    .devxp-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+    @media (min-width: 900px) { .devxp-grid { grid-template-columns: 1fr 1fr; } }
+    .section { background: #fafafa; border: 1px solid #e5e7eb; padding: 20px; margin-bottom: 16px; }
+    .section h4 { margin: 0 0 12px 0; font-size: 16px; font-weight: 700; border-left: 3px solid var(--primary); padding-left: 12px; }
+    .section p { margin: 8px 0 16px; color: var(--muted); line-height: 1.6; }
+    .kv { margin: 0; padding-left: 18px; }
+    .kv li { margin: 4px 0; }
+    .endpoints { margin: 0; padding-left: 18px; }
+    .endpoints li { margin: 6px 0; font-size: 13px; line-height: 1.5; }
+    .endpoints code { background: #f3f4f6; border: 1px solid #e5e7eb; padding: 2px 8px; border-radius: 3px; }
+    .features { margin: 0; padding-left: 18px; }
+    .features li { margin: 8px 0; line-height: 1.5; }
+    .features strong { color: var(--primary); }
+    .code-example { margin-top: 20px; padding: 16px; background: #f8f9fa; border-left: 3px solid var(--primary); border-radius: 4px; }
+    .code-example h5 { margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: var(--primary); }
+    .components li, .infra-features li, .dev-points li, .db-tables li { margin: 6px 0; font-size: 13px; line-height: 1.5; }
+    .components code, .infra-features code, .dev-points code, .db-tables code { background: #e9ecef; padding: 1px 4px; border-radius: 2px; }
+    .code { background: #0a1a2f; color: #e5edf7; border: 1px solid #0a1a2f; padding: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; overflow-x: auto; }
+    .cta-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+    .cta-link { display: inline-block; padding: 8px 12px; border: 1px solid #e5e7eb; background: #fff; text-decoration: none; color: #111827; }
+    .cta-link:hover { background: #f3f4f6; }
+
+    /* React版に合わせたサイトフッター */
+    .site-footer { margin-top: 64px; background: #fff; border-top: 1px solid #e5e7eb; }
+    .site-footer .inner { padding: 24px 0; }
+    .site-footer .top { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+    @media (min-width: 600px) { .site-footer .top { flex-direction: row; justify-content: space-between; align-items: center; } }
+    .site-footer .brand { font-size: 16px; font-weight: 600; }
+    .site-footer .nav { display: flex; gap: 24px; }
+    .site-footer .nav a { color: inherit; text-decoration: none; }
+    .site-footer .nav a:hover { text-decoration: underline; }
+    .site-footer .divider { height: 1px; background: #e5e7eb; margin: 16px 0; }
+    .site-footer .copyright { color: var(--muted); font-size: 12px; padding-bottom: 16px; }
+  </style>
+</head>
+<body>
+  <!-- 背景：コードアニメーションは削除 -->
+  
+  <header>
+    <div class="container">
+      <div class="brand">Engineer English App</div>
+      <div class="copy">コードは世界を跨ぐ ~ Code crosses borders ~</div>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- 画像スライド（フロントの画像を再利用） -->
+    <section class="carousel">
+      <div class="carousel-track">
+        <img src="https://d2w237yrqesgsh.cloudfront.net/images/engineer_01.jpeg" alt="engineer-1" />
+        <img src="https://d2w237yrqesgsh.cloudfront.net/images/engineer_02.jpeg" alt="engineer-2" />
+        <img src="https://d2w237yrqesgsh.cloudfront.net/images/engineer_03.jpeg" alt="engineer-3" />
+        <!-- ループを途切れさせないよう複製 -->
+        <img src="https://d2w237yrqesgsh.cloudfront.net/images/engineer_01.jpeg" alt="engineer-1-dup" />
+        <img src="https://d2w237yrqesgsh.cloudfront.net/images/engineer_02.jpeg" alt="engineer-2-dup" />
+        <img src="https://d2w237yrqesgsh.cloudfront.net/images/engineer_03.jpeg" alt="engineer-3-dup" />
+      </div>
+    </section>
+
+    <section class="hero">
+      <div class="hero-content">
+        <h1>エンジニアのための、実務に効く英語学習</h1>
+        <p>要件定義から運用・保守まで、開発プロセスに沿ったシーンとレッスンで英語を習得。実務で使える表現を音声読み上げと会話練習で身につけ、学習の進捗は自動で記録。困ったときはAIに相談できます。</p>
+        <div style="margin-top:16px"><a class="cta" href="https://d2w237yrqesgsh.cloudfront.net">学習をはじめる</a></div>
+      </div>
+    </section>
+
+    <section class="cards">
+      <article class="card card--3">
+        <div class="kpi">{{ stats.scenes }}</div>
+        <div class="muted">シーン</div>
+        <ul class="list muted">
+          <li>要件定義 / 基本設計 / 詳細設計 / 実装 / テスト / 運用・保守</li>
+        </ul>
+      </article>
+      <article class="card card--3">
+        <div class="kpi">{{ stats.lessons }}</div>
+        <div class="muted">レッスン</div>
+        <ul class="list muted">
+          <li>レッスンごとにフレーズ・対話を収録</li>
+          <li>学習進捗を自動記録</li>
+        </ul>
+      </article>
+      <article class="card card--3">
+        <div class="kpi">{{ stats.phrases }}</div>
+        <div class="muted">フレーズ</div>
+        <ul class="list muted">
+          <li>音声読み上げ（Web Speech API）</li>
+        </ul>
+      </article>
+      <article class="card card--3">
+        <div class="kpi">{{ stats.dialogues }}</div>
+        <div class="muted">対話</div>
+        <ul class="list muted">
+          <li>順序付き会話でロールプレイ</li>
+        </ul>
+      </article>
+    </section>
+
+    <section class="cards">
+      <article class="card">
+        <div class="devxp">
+                     <h3>ポートフォリオ</h3>
+           <div class="stack-badges">
+             <span class="badge">🐍 <strong>Django</strong></span>
+             <span class="badge">🐍 <strong>DjangoRestFramework</strong></span>
+             <span class="badge">🐍 <strong>Channels</strong>（WebSocket）</span>
+             <span class="badge">🐍 <strong>Django ORM</strong></span>
+             <span class="badge">⚛️ <strong>React</strong> + <strong>MaterialUI</strong></span>
+           </div>
+
+           <hr style="border: none; border-top: 2px dashed #e5e7eb; margin: 20px 0;">
+
+           <h3>フロントエンド</h3>
+          <div class="stack-badges">
+            <span class="badge">⚛️ Material UI</span>
+            <span class="badge">🤖 Chatbot</span>
+            <span class="badge">🔄 レスポンシブデザイン</span>
+            <span class="badge">🟨 アニメーション背景</span>
+          </div>
+
+          <h3>バックエンド</h3>
+          <div class="stack-badges">
+            <span class="badge">⚙️ Restful設計</span>
+            <span class="badge">⚙️ JSON API</span>
+            <span class="badge">🌐 CORS対応</span>
+            <span class="badge">⏳ 進捗管理システム</span>
+          </div>
+
+          <h3>インフラ</h3>
+          <div class="stack-badges">
+            <span class="badge">🟪 Terraform</span>
+            <span class="badge">🐋 Docker</span>
+            <span class="badge">☁️ Lambda</span>
+            <span class="badge">☁️ API Gateway</span>
+            <span class="badge">☁️ CloudFront</span>
+            <span class="badge">☁️ S3 静的ホスティング</span> 
+          </div>
+
+          <h3>データベース</h3>
+           <div class="stack-badges">
+            <span class="badge">🐍 Django ORM</span> 
+            <span class="badge">🗄️ SQLite（開発・デモ）</span>
+             
+           </div>
+
+          <h3>アップデート予定</h3>
+          <div class="stack-badges">
+            <span class="badge">🗄️ PostgreSQL</span>
+            <span class="badge">🤖 Chatbot API導入</span>
+            <span class="badge">🔓 ログイン機能</span>
+          </div>
+
+          
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container inner">
+      <div class="top">
+        <div class="brand">Engineer English Inc.</div>
+        <nav class="nav">
+          <a href="https://d2w237yrqesgsh.cloudfront.net/terms">利用規約</a>
+          <a href="https://d2w237yrqesgsh.cloudfront.net/privacy">プライバシーポリシー</a>
+          <a href="https://d2w237yrqesgsh.cloudfront.net/contact">お問い合わせ</a>
+        </nav>
+      </div>
+      <div class="divider"></div>
+      <div class="copyright">© {% now 'Y' %} Engineer English Inc. All rights reserved.</div>
+    </div>
+  </footer>
+
+</body>
+</html> 

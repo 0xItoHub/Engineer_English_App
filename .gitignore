@@ -1,0 +1,35 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.coverage
+
+# Django local DB
+/db.sqlite3
+/seed_db.sqlite3
+
+# Development files
+WORK_LOG.md
+test_payload.json
+deploy.sh
+deploy.ps1
+
+# Node / React
+frontend/node_modules/
+frontend/build/
+
+# Terraform
+infra/.terraform/
+infra/*.tfstate
+infra/*.tfstate.backup
+infra/*.tfvars
+infra/response.json
+
+# OS / misc
+.DS_Store
+*.log
+
+# VSCode
+.vscode/ 
