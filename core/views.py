@@ -1,5 +1,6 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from django.contrib.auth.models import User
 from django.shortcuts import render
@@ -75,14 +76,29 @@ class UserProgressViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(progress, many=True)
         return Response(serializer.data)
 
-    @action(detail=False, methods=["post"])
+    # 既存UXを維持するため complete_lesson は未認証でも呼べる（未認証時は保存せず ok を返す）。
+    @action(detail=False, methods=["post"], permission_classes=[AllowAny])
     def complete_lesson(self, request):
-        lesson_id = request.data.get("lesson_id")
-        score = request.data.get("score", 0)
-        time_spent = request.data.get("time_spent", 0)
+        # 入力の検証・型変換（不正値は 500 ではなく 400 を返す）
+        try:
+            lesson_id = int(request.data.get("lesson_id"))
+        except (TypeError, ValueError):
+            return Response(
+                {"error": "lesson_id は整数で指定してください"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            score = int(request.data.get("score", 0))
+            time_spent = int(request.data.get("time_spent", 0))
+        except (TypeError, ValueError):
+            return Response(
+                {"error": "score / time_spent は整数で指定してください"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        # スコアを100%を超えないように制限
+        # スコアを 0〜100 に、学習時間を 0 以上に制限
         score = min(max(0, score), 100)
+        time_spent = max(0, time_spent)
 
         try:
             lesson = Lesson.objects.get(id=lesson_id)

@@ -90,13 +90,39 @@ _csrf_trusted = os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").strip()
 if _csrf_trusted:
     CSRF_TRUSTED_ORIGINS = [o for o in _csrf_trusted.split(",") if o]
 
+# 本番（DEBUG=False）でのみ有効化するセキュリティ設定。
+# ローカル開発（DEBUG=True）には影響しない。
+if not DEBUG:
+    # SECRET_KEY が未設定（insecureデフォルトのまま）での本番起動を防ぐ。
+    # ※デプロイ前に必ず環境変数 DJANGO_SECRET_KEY を設定すること。
+    if SECRET_KEY == "django-insecure-change-me":
+        from django.core.exceptions import ImproperlyConfigured
+
+        raise ImproperlyConfigured(
+            "本番(DEBUG=False)では環境変数 DJANGO_SECRET_KEY の設定が必須です。"
+        )
+
+    # HTTPS終端（API Gateway / CloudFront）の背後にいるため、転送ヘッダで判定。
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    # SSLリダイレクトはリダイレクトループ回避のため既定オフ（必要なら env で有効化）。
+    SECURE_SSL_REDIRECT = os.getenv("DJANGO_SECURE_SSL_REDIRECT", "False") == "True"
+    SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_SECURE_HSTS_SECONDS", "31536000"))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    X_FRAME_OPTIONS = "DENY"
+
 # Django REST Framework設定
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.SessionAuthentication",
         "rest_framework.authentication.BasicAuthentication",
     ],
+    # 既定は「読み取りは誰でも / 書き込みは認証ユーザーのみ」。
+    # 未認証での書込・削除を防ぐ。GET主体のUIには影響しない。
     "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.AllowAny",
+        "rest_framework.permissions.IsAuthenticatedOrReadOnly",
     ],
 }
