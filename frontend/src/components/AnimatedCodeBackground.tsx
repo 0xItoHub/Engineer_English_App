@@ -86,7 +86,8 @@ const AnimatedCodeBackground: React.FC = () => {
     const resize = () => {
       canvas.width = Math.floor(window.innerWidth * dpr);
       canvas.height = Math.floor(window.innerHeight * dpr);
-      c.scale(dpr, dpr);
+      // リサイズのたびに倍率を設定し直す（scale の累積を防ぐ）
+      c.setTransform(dpr, 0, 0, dpr, 0, 0);
       if (reducedMotion) drawStatic();
     };
     resize();
