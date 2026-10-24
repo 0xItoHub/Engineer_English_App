@@ -1,12 +1,12 @@
-import React from 'react';
+import { vi, type Mocked } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import axios from 'axios';
 import LessonDetail from './LessonDetail';
 import { LOCAL_PROGRESS_KEY } from './lib/storage';
 
-jest.mock('axios');
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+vi.mock('axios');
+const mockedAxios = axios as Mocked<typeof axios>;
 
 const lesson = {
   id: 5,
@@ -38,7 +38,7 @@ function renderLessonDetail() {
 }
 
 afterEach(() => {
-  jest.resetAllMocks();
+  vi.resetAllMocks();
 });
 
 test('レッスン概要を表示し、ステップを進めてフレーズ・対話を表示する', async () => {
@@ -68,14 +68,14 @@ test('音声読み上げ非対応の環境では読み上げボタンを無効�
 });
 
 test('音声読み上げ対応の環境では速度を選んで読み上げられる', async () => {
-  const speakMock = jest.fn();
+  const speakMock = vi.fn();
   const synth = {
     speaking: false,
     speak: speakMock,
-    cancel: jest.fn(),
+    cancel: vi.fn(),
     getVoices: () => [],
-    addEventListener: jest.fn(),
-    removeEventListener: jest.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
   };
   class FakeUtterance {
     text: string;
@@ -104,8 +104,9 @@ test('音声読み上げ対応の環境では速度を選んで読み上げら�
     expect(speakMock.mock.calls[0][0]).toMatchObject({ text: 'I fixed the bug.', rate: 1 });
     expect(screen.getByRole('button', { name: 'I fixed the bug. の読み上げを停止' })).toBeInTheDocument();
   } finally {
-    delete (window as any).speechSynthesis;
-    delete (window as any).SpeechSynthesisUtterance;
+    const w = window as unknown as Record<string, unknown>;
+    delete w.speechSynthesis;
+    delete w.SpeechSynthesisUtterance;
   }
 });
 
