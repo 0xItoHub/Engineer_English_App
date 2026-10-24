@@ -261,7 +261,7 @@ const LessonDetail: React.FC = () => {
 
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
         <CircularProgress size={60} aria-label="読み込み中" />
       </Box>
     );
@@ -401,7 +401,7 @@ const LessonDetail: React.FC = () => {
           {currentStep === 3 && (
             <Box>
               <Typography variant="h6" component="h2" gutterBottom><span aria-hidden="true">🎉</span> まとめ</Typography>
-              <Typography variant="body1" paragraph>お疲れさまでした！このレッスンは完了です。</Typography>
+              <Typography variant="body1" sx={{ mb: 2 }}>お疲れさまでした！このレッスンは完了です。</Typography>
             </Box>
           )}
         </CardContent>

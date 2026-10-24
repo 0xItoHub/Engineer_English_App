@@ -114,7 +114,7 @@ const ProgressHistory: React.FC = () => {
 
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
         <CircularProgress size={60} aria-label="読み込み中" />
       </Box>
     );
@@ -199,7 +199,7 @@ const ProgressHistory: React.FC = () => {
                 <TableBody>
                   {progress.map((item, idx) => (
                     <TableRow key={item.id ?? `local-${idx}`}>
-                      <TableCell><Typography variant="body1" fontWeight="bold">{item.lesson_title}</Typography></TableCell>
+                      <TableCell><Typography variant="body1" sx={{ fontWeight: 'bold' }}>{item.lesson_title}</Typography></TableCell>
                       <TableCell><Chip label={item.scene_title} size="small" color="primary" /></TableCell>
                       <TableCell><Typography variant="body2" color="text.secondary">{formatDate(item.completed_at)}</Typography></TableCell>
                       <TableCell>
