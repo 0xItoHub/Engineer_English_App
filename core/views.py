@@ -124,9 +124,7 @@ class UserProgressViewSet(viewsets.ModelViewSet):
                     }
                 )
         except Lesson.DoesNotExist:
-            return Response(
-                {"error": "レッスンが見つかりません"}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"error": "レッスンが見つかりません"}, status=status.HTTP_404_NOT_FOUND)
 
 
 def home(request):

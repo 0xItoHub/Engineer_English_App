@@ -337,9 +337,7 @@ class Command(BaseCommand):
 
             # 既存seed由来データのクリーンアップ（安全に）
             Phrase.objects.filter(scene=scene, note="seed").delete()
-            Dialogue.objects.filter(
-                scene=scene, line_en__in=OLD_GENERIC_DIALOGUE_EN
-            ).delete()
+            Dialogue.objects.filter(scene=scene, line_en__in=OLD_GENERIC_DIALOGUE_EN).delete()
 
             # レッスン5件（タイトルはシーン固有）
             lessons = []
