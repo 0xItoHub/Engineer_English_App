@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from core.models import Scene, Lesson, Phrase, Dialogue
+
+from core.models import Dialogue, Lesson, Phrase, Scene
 
 SCENES = [
     "要件定義",
@@ -320,7 +321,10 @@ SCENE_DATA = {
 
 
 class Command(BaseCommand):
-    help = "Ensure each of the six scenes has scene-specific 5 lessons, 5 phrases, 5 dialogues (phrases/dialogues attached to lessons)."
+    help = (
+        "Ensure each of the six scenes has scene-specific 5 lessons, 5 phrases, "
+        "5 dialogues (phrases/dialogues attached to lessons)."
+    )
 
     @transaction.atomic
     def handle(self, *args, **options):
@@ -333,9 +337,7 @@ class Command(BaseCommand):
 
             # 既存seed由来データのクリーンアップ（安全に）
             Phrase.objects.filter(scene=scene, note="seed").delete()
-            Dialogue.objects.filter(
-                scene=scene, line_en__in=OLD_GENERIC_DIALOGUE_EN
-            ).delete()
+            Dialogue.objects.filter(scene=scene, line_en__in=OLD_GENERIC_DIALOGUE_EN).delete()
 
             # レッスン5件（タイトルはシーン固有）
             lessons = []
@@ -409,7 +411,10 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.SUCCESS(
-                "Scene-specific seed done: +{l} lessons, +{p} phrases, +{d} dialogues (updated {up_p} phrases, {up_d} dialogues).".format(
+                (
+                    "Scene-specific seed done: +{l} lessons, +{p} phrases, +{d} dialogues "
+                    "(updated {up_p} phrases, {up_d} dialogues)."
+                ).format(
                     l=created_counts["lesson"],
                     p=created_counts["phrase"],
                     d=created_counts["dialogue"],

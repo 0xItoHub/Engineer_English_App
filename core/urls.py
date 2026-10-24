@@ -1,9 +1,10 @@
 from rest_framework import routers
+
 from .views import (
-    SceneViewSet,
-    PhraseViewSet,
     DialogueViewSet,
     LessonViewSet,
+    PhraseViewSet,
+    SceneViewSet,
     UserProgressViewSet,
 )
 
