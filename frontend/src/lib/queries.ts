@@ -196,3 +196,18 @@ export function mergeProgress(serverList: ServerProgress[], localList: LocalProg
   }
   return Array.from(map.values());
 }
+
+// シーン一覧から教材の総数（シーン・レッスン・フレーズ・対話）を集計する
+export type ContentStats = { scenes: number; lessons: number; phrases: number; dialogues: number };
+
+export function countContent(scenes: Scene[]): ContentStats {
+  return scenes.reduce<ContentStats>(
+    (acc, s) => ({
+      scenes: acc.scenes + 1,
+      lessons: acc.lessons + (s.lessons?.length ?? 0),
+      phrases: acc.phrases + (s.phrases?.length ?? 0),
+      dialogues: acc.dialogues + (s.dialogues?.length ?? 0),
+    }),
+    { scenes: 0, lessons: 0, phrases: 0, dialogues: 0 }
+  );
+}

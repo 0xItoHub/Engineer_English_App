@@ -20,8 +20,11 @@ import {
   TrendingUp as TrendingUpIcon
 } from "@mui/icons-material";
 import AnimatedCodeBackground from "./components/AnimatedCodeBackground";
+import HomeHero from "./components/HomeHero";
+import ContentStats from "./components/ContentStats";
+import TechStack from "./components/TechStack";
 import { readLocalProgress } from "./lib/storage";
-import { mergeProgress, useMyProgressQuery, useScenesQuery, type Scene } from "./lib/queries";
+import { countContent, mergeProgress, useMyProgressQuery, useScenesQuery, type Scene } from "./lib/queries";
 
 // カルーセル用画像（public/images/ 配下に配置してください）
 const heroImages = [
@@ -29,6 +32,9 @@ const heroImages = [
   "/images/engineer_02.jpeg",
   "/images/engineer_03.jpeg",
 ];
+
+// シーン一覧の要素 ID（「学習をはじめる」の移動先）
+const SCENE_LIST_ID = "scene-list";
 
 // 無限スライドアニメーション
 const slide = keyframes`
@@ -127,74 +133,85 @@ const ScenesList: React.FC = () => {
           </Box>
         </Paper>
 
+        {/* アプリの概要と学習開始への導線 */}
+        <HomeHero targetId={SCENE_LIST_ID} />
+
+        {/* 収録コンテンツの数（シーン一覧から集計） */}
+        {scenes.length > 0 && <ContentStats stats={countContent(scenes)} />}
+
         {/* Scene一覧 */}
-        {scenes.length === 0 ? (
-          <Paper elevation={1} sx={{ p: 4, textAlign: "center" }}>
-            <BookIcon sx={{ fontSize: 60, color: "text.secondary", mb: 2 }} />
-            <Typography variant="h6" color="text.secondary" gutterBottom>
-              まだシーンが登録されていません
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              管理画面からシーンを追加してください
-            </Typography>
-          </Paper>
-        ) : (
-          <Box component="section" aria-label="シーン一覧" sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-            {scenes.map((scene) => {
-              const { done, total, percent } = getSceneProgress(scene);
-              return (
-                <Box key={scene.id} sx={{ flex: '1 1 300px', maxWidth: '400px' }}>
-                  <Card elevation={2} sx={{ height: "100%", transition: "transform 0.2s ease-in-out", "&:hover": { transform: "translateY(-4px)", boxShadow: 4 } }}>
-                    <CardContent sx={{ flexGrow: 1 }}>
-                      <Typography variant="h6" component="h2" gutterBottom noWrap>
-                        {scene.title}
-                      </Typography>
+        <Box id={SCENE_LIST_ID} tabIndex={-1} sx={{ outline: 'none', scrollMarginTop: 16 }}>
+          {scenes.length === 0 ? (
+            <Paper elevation={1} sx={{ p: 4, textAlign: "center" }}>
+              <BookIcon sx={{ fontSize: 60, color: "text.secondary", mb: 2 }} />
+              <Typography variant="h6" color="text.secondary" gutterBottom>
+                まだシーンが登録されていません
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                管理画面からシーンを追加してください
+              </Typography>
+            </Paper>
+          ) : (
+            <Box component="section" aria-label="シーン一覧" sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+              {scenes.map((scene) => {
+                const { done, total, percent } = getSceneProgress(scene);
+                return (
+                  <Box key={scene.id} sx={{ flex: '1 1 300px', maxWidth: '400px' }}>
+                    <Card elevation={2} sx={{ height: "100%", transition: "transform 0.2s ease-in-out", "&:hover": { transform: "translateY(-4px)", boxShadow: 4 } }}>
+                      <CardContent sx={{ flexGrow: 1 }}>
+                        <Typography variant="h6" component="h2" gutterBottom noWrap>
+                          {scene.title}
+                        </Typography>
 
-                      {/* 進捗バー */}
-                      <Box sx={{ mt: 1, mb: 2 }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                          <Typography variant="caption" color="text.secondary">進捗</Typography>
-                          <Typography variant="caption" color="text.secondary">{percent}% ({done}/{total})</Typography>
+                        {/* 進捗バー */}
+                        <Box sx={{ mt: 1, mb: 2 }}>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                            <Typography variant="caption" color="text.secondary">進捗</Typography>
+                            <Typography variant="caption" color="text.secondary">{percent}% ({done}/{total})</Typography>
+                          </Box>
+                          <LinearProgress
+                            variant="determinate"
+                            value={percent}
+                            aria-label={`${scene.title} の進捗`}
+                            sx={{ height: 8, borderRadius: 4 }}
+                          />
                         </Box>
-                        <LinearProgress
-                          variant="determinate"
-                          value={percent}
-                          aria-label={`${scene.title} の進捗`}
-                          sx={{ height: 8, borderRadius: 4 }}
-                        />
-                      </Box>
 
-                      {/* メタ情報（任意） */}
-                      <Box sx={{ mt: 1, mb: 1 }}>
-                        <Chip icon={<BookIcon />} label={`${scene.phrases?.length || 0} フレーズ`} size="small" sx={{ mr: 1, mb: 1 }} />
-                        <Chip icon={<ChatIcon />} label={`${scene.dialogues?.length || 0} 対話`} size="small" sx={{ mr: 1, mb: 1 }} />
-                        <Chip icon={<PlayIcon />} label={`${scene.lessons?.length || 0} レッスン`} size="small" sx={{ mb: 1 }} />
-                      </Box>
-                    </CardContent>
+                        {/* メタ情報（任意） */}
+                        <Box sx={{ mt: 1, mb: 1 }}>
+                          <Chip icon={<BookIcon />} label={`${scene.phrases?.length || 0} フレーズ`} size="small" sx={{ mr: 1, mb: 1 }} />
+                          <Chip icon={<ChatIcon />} label={`${scene.dialogues?.length || 0} 対話`} size="small" sx={{ mr: 1, mb: 1 }} />
+                          <Chip icon={<PlayIcon />} label={`${scene.lessons?.length || 0} レッスン`} size="small" sx={{ mb: 1 }} />
+                        </Box>
+                      </CardContent>
 
-                    <CardActions>
-                      <Button
-                        size="small"
-                        startIcon={<PlayIcon />}
-                        variant="contained"
-                        fullWidth
-                        onClick={() => handleStartLearning(scene.id)}
-                        aria-label={`${scene.title} の学習を開始`}
-                        sx={{
-                          bgcolor: 'primary.light',
-                          color: 'primary.contrastText',
-                          '&:hover': { bgcolor: 'primary.main' },
-                        }}
-                      >
-                        学習開始
-                      </Button>
-                    </CardActions>
-                  </Card>
-                </Box>
-              );
-            })}
-          </Box>
-        )}
+                      <CardActions>
+                        <Button
+                          size="small"
+                          startIcon={<PlayIcon />}
+                          variant="contained"
+                          fullWidth
+                          onClick={() => handleStartLearning(scene.id)}
+                          aria-label={`${scene.title} の学習を開始`}
+                          sx={{
+                            bgcolor: 'primary.light',
+                            color: 'primary.contrastText',
+                            '&:hover': { bgcolor: 'primary.main' },
+                          }}
+                        >
+                          学習開始
+                        </Button>
+                      </CardActions>
+                    </Card>
+                  </Box>
+                );
+              })}
+            </Box>
+          )}
+        </Box>
+
+        {/* 技術スタック */}
+        <TechStack />
       </Box>
     </Box>
   );
