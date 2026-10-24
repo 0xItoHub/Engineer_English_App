@@ -11,8 +11,7 @@
 
 
 ## サイト
-- **TOPページ**: https://vri07nkptg.execute-api.ap-northeast-1.amazonaws.com
-- **学習ページ**: https://d2w237yrqesgsh.cloudfront.net
+- **サイト**: https://d2w237yrqesgsh.cloudfront.net（API は同じドメインの `/api/` で提供）
 
 
 ---

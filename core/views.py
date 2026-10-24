@@ -1,15 +1,17 @@
-from django.shortcuts import render
-from rest_framework import status, viewsets
+import os
+
+from django.shortcuts import redirect
+from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 
 from .models import Dialogue, Lesson, Phrase, Scene, UserProgress
 from .serializers import (
     DialogueSerializer,
-    LessonDetailSerializer,  # 追加
+    LessonDetailSerializer,
     LessonSerializer,
     PhraseSerializer,
     SceneSerializer,
@@ -49,23 +51,24 @@ class LessonSceneFilterMixin:
         return qs
 
 
-class SceneViewSet(viewsets.ModelViewSet):
+# 学習コンテンツは読み取り専用で公開する（編集は管理画面から行う）
+class SceneViewSet(viewsets.ReadOnlyModelViewSet):
     # ネストしたフレーズ・対話・レッスンをまとめて取得し、シーン数に依存しないクエリ数にする
     queryset = Scene.objects.prefetch_related("phrases", "dialogues", "lessons")
     serializer_class = SceneSerializer
 
 
-class PhraseViewSet(LessonSceneFilterMixin, viewsets.ModelViewSet):
+class PhraseViewSet(LessonSceneFilterMixin, viewsets.ReadOnlyModelViewSet):
     queryset = Phrase.objects.all()
     serializer_class = PhraseSerializer
 
 
-class DialogueViewSet(LessonSceneFilterMixin, viewsets.ModelViewSet):
+class DialogueViewSet(LessonSceneFilterMixin, viewsets.ReadOnlyModelViewSet):
     queryset = Dialogue.objects.all()
     serializer_class = DialogueSerializer
 
 
-class LessonViewSet(viewsets.ModelViewSet):
+class LessonViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Lesson.objects.all()
 
     def get_queryset(self):
@@ -82,21 +85,29 @@ class LessonViewSet(viewsets.ModelViewSet):
         return LessonSerializer
 
 
-class UserProgressViewSet(viewsets.ModelViewSet):
+class UserProgressViewSet(
+    mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet
+):
+    """学習進捗。一覧・詳細はログインユーザー本人のデータのみを返す。
+
+    記録は complete_lesson から行う。
+    """
+
     # シリアライザで参照するレッスン・シーン・ユーザーを JOIN で同時に取得する
     queryset = UserProgress.objects.select_related("lesson__scene", "user")
     serializer_class = UserProgressSerializer
+    permission_classes = [IsAuthenticated]
 
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+    def get_queryset(self):
+        user = self.request.user
+        if not user.is_authenticated:
+            return UserProgress.objects.none()
+        return super().get_queryset().filter(user=user)
 
-    @action(detail=False, methods=["get"])
+    @action(detail=False, methods=["get"], permission_classes=[AllowAny])
     def my_progress(self, request):
-        if request.user.is_authenticated:
-            progress = self.get_queryset().filter(user=request.user)
-        else:
-            progress = UserProgress.objects.none()
-        serializer = self.get_serializer(progress, many=True)
+        # 未ログイン時は空の一覧を返す（画面側はブラウザに保存した進捗を表示する）
+        serializer = self.get_serializer(self.get_queryset(), many=True)
         return Response(serializer.data)
 
     # 既存UXを維持するため complete_lesson は未認証でも呼べる（未認証時は保存せず ok を返す）。
@@ -165,15 +176,5 @@ class UserProgressViewSet(viewsets.ModelViewSet):
 
 
 def home(request):
-    stats = {
-        "scenes": Scene.objects.count(),
-        "lessons": Lesson.objects.count(),
-        "phrases": Phrase.objects.count(),
-        "dialogues": Dialogue.objects.count(),
-    }
-    ctx = {
-        "stats": stats,
-        "frontend_url": "http://localhost:3000/",
-        "api_base": "/api/",
-    }
-    return render(request, "core/home.html", ctx)
+    """API のトップへのアクセスはフロントエンドへ転送する（転送先は環境変数で固定）。"""
+    return redirect(os.getenv("DJANGO_FRONTEND_URL", "http://localhost:3000/"))

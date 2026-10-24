@@ -14,4 +14,5 @@ from mangum import Mangum  # noqa: E402
 
 from engineer_english.asgi import application  # noqa: E402
 
-handler = Mangum(application)
+# Django の ASGI アプリは lifespan プロトコルを使わないため無効にする
+handler = Mangum(application, lifespan="off")

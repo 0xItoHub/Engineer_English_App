@@ -2,7 +2,7 @@ import pytest
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
-from core.models import Phrase, Scene, UserProgress
+from core.models import UserProgress
 from core.throttles import CompleteLessonRateThrottle
 
 from .factories import (
@@ -103,31 +103,73 @@ def test_lesson_detail_query_count(api_client, content):
 
 
 @pytest.mark.parametrize("resource", ["scene", "lesson", "phrase", "dialogue"])
-def test_anonymous_write_is_forbidden(api_client, content, resource):
+def test_anonymous_write_is_rejected(api_client, content, resource):
     obj = content[resource]
     base = f"/api/{resource}s/"
 
-    assert api_client.post(base, {"title": "x"}, format="json").status_code == 403
-    assert api_client.put(f"{base}{obj.id}/", {"title": "x"}, format="json").status_code == 403
-    assert api_client.patch(f"{base}{obj.id}/", {"title": "x"}, format="json").status_code == 403
-    assert api_client.delete(f"{base}{obj.id}/").status_code == 403
+    assert api_client.post(base, {"title": "x"}, format="json").status_code in (403, 405)
+    assert api_client.put(f"{base}{obj.id}/", {"title": "x"}, format="json").status_code in (
+        403,
+        405,
+    )
+    assert api_client.patch(f"{base}{obj.id}/", {"title": "x"}, format="json").status_code in (
+        403,
+        405,
+    )
+    assert api_client.delete(f"{base}{obj.id}/").status_code in (403, 405)
     assert type(obj).objects.filter(id=obj.id).exists()
 
 
-def test_authenticated_user_can_create_scene(auth_client, db):
-    res = auth_client.post("/api/scenes/", {"title": "Pairing"}, format="json")
+@pytest.mark.parametrize("resource", ["scene", "lesson", "phrase", "dialogue"])
+def test_content_is_read_only_for_authenticated_user(auth_client, content, resource):
+    obj = content[resource]
+    base = f"/api/{resource}s/"
 
-    assert res.status_code == 201
-    assert Scene.objects.filter(title="Pairing").exists()
+    assert auth_client.post(base, {"title": "x"}, format="json").status_code == 405
+    assert auth_client.put(f"{base}{obj.id}/", {"title": "x"}, format="json").status_code == 405
+    assert auth_client.patch(f"{base}{obj.id}/", {"title": "x"}, format="json").status_code == 405
+    assert auth_client.delete(f"{base}{obj.id}/").status_code == 405
+    assert type(obj).objects.filter(id=obj.id).exists()
 
 
-def test_authenticated_progress_create_sets_owner(auth_client, user, lesson):
-    res = auth_client.post(
-        "/api/progress/", {"lesson": lesson.id, "score": 70, "time_spent": 30}, format="json"
-    )
+# --- 進捗の一覧・詳細 -------------------------------------------------------
 
-    assert res.status_code == 201
-    assert UserProgress.objects.get().user == user
+
+def test_progress_list_requires_login(api_client, user, lesson):
+    make_progress(user, lesson, score=60)
+
+    assert api_client.get("/api/progress/").status_code == 403
+
+
+def test_progress_list_returns_only_own_records(auth_client, user, lesson):
+    other = make_user("bob")
+    other_lesson = make_lesson(lesson.scene, title="Other")
+    make_progress(user, lesson, score=60)
+    make_progress(other, other_lesson, score=30)
+
+    body = auth_client.get("/api/progress/").json()
+
+    assert len(body) == 1
+    assert body[0]["username"] == "alice"
+
+
+def test_progress_detail_of_other_user_returns_404(auth_client, user, lesson):
+    other = make_user("bob")
+    others = make_progress(other, lesson, score=30)
+
+    assert auth_client.get(f"/api/progress/{others.id}/").status_code == 404
+
+
+@pytest.mark.parametrize("method", ["post", "put", "patch", "delete"])
+def test_progress_direct_write_is_not_allowed(auth_client, user, lesson, method):
+    progress = make_progress(user, lesson, score=60)
+    url = "/api/progress/" if method == "post" else f"/api/progress/{progress.id}/"
+
+    res = getattr(auth_client, method)(url, {"lesson": lesson.id, "score": 100}, format="json")
+
+    assert res.status_code == 405
+    progress.refresh_from_db()
+    assert progress.score == 60
 
 
 # --- complete_lesson --------------------------------------------------------
@@ -257,10 +299,16 @@ def test_unknown_url_returns_404(client, db):
     assert client.get("/api/no-such-resource/").status_code == 404
 
 
-def test_home_renders_stats(client, content):
-    make_phrase(scene=content["scene"])
+def test_home_redirects_to_frontend(client, monkeypatch):
+    monkeypatch.setenv("DJANGO_FRONTEND_URL", "https://frontend.example/")
     res = client.get("/")
 
-    assert res.status_code == 200
-    assert res.context["stats"] == {"scenes": 1, "lessons": 1, "phrases": 2, "dialogues": 1}
-    assert Phrase.objects.count() == 2
+    assert res.status_code == 302
+    assert res["Location"] == "https://frontend.example/"
+
+
+def test_home_redirect_ignores_query_parameters(client, monkeypatch):
+    monkeypatch.setenv("DJANGO_FRONTEND_URL", "https://frontend.example/")
+    res = client.get("/?next=https://evil.example/")
+
+    assert res["Location"] == "https://frontend.example/"
