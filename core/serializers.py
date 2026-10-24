@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import Scene, Phrase, Dialogue, Lesson, UserProgress
+
+from .models import Dialogue, Lesson, Phrase, Scene, UserProgress
 
 
 class PhraseSerializer(serializers.ModelSerializer):

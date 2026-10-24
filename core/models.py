@@ -1,5 +1,5 @@
-from django.db import models
 from django.contrib.auth.models import User
+from django.db import models
 
 
 class Scene(models.Model):
@@ -72,4 +72,5 @@ class UserProgress(models.Model):
         ordering = ["-completed_at"]
 
     def __str__(self):
-        return f"{self.user.username} - {self.lesson.title} ({self.completed_at.strftime('%Y-%m-%d')})"
+        completed = self.completed_at.strftime("%Y-%m-%d")
+        return f"{self.user.username} - {self.lesson.title} ({completed})"

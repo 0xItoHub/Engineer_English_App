@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import Scene, Phrase, Dialogue, Lesson, UserProgress
+
+from .models import Dialogue, Lesson, Phrase, Scene, UserProgress
 
 admin.site.register(Scene)
 admin.site.register(Phrase)

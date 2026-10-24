@@ -1,17 +1,17 @@
-from rest_framework import viewsets, status
+from django.shortcuts import render
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from django.contrib.auth.models import User
-from django.shortcuts import render
-from .models import Scene, Phrase, Dialogue, Lesson, UserProgress
+
+from .models import Dialogue, Lesson, Phrase, Scene, UserProgress
 from .serializers import (
-    SceneSerializer,
-    PhraseSerializer,
     DialogueSerializer,
-    LessonSerializer,
-    UserProgressSerializer,
     LessonDetailSerializer,  # 追加
+    LessonSerializer,
+    PhraseSerializer,
+    SceneSerializer,
+    UserProgressSerializer,
 )
 
 

@@ -1,5 +1,5 @@
-from pathlib import Path
 import os
+from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -116,7 +116,8 @@ if not DEBUG:
         from django.core.exceptions import ImproperlyConfigured
 
         raise ImproperlyConfigured(
-            "本番(DEBUG=False)では DJANGO_SECRET_KEY または DJANGO_SECRET_KEY_SSM_PARAM の設定が必須です。"
+            "本番(DEBUG=False)では DJANGO_SECRET_KEY または "
+            "DJANGO_SECRET_KEY_SSM_PARAM の設定が必須です。"
         )
 
     # HTTPS終端（API Gateway / CloudFront）の背後にいるため、転送ヘッダで判定。
