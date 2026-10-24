@@ -5,51 +5,56 @@
 
 ## 技術スタック
 
-- React 19 / TypeScript 4.9（Create React App 5 / react-scripts 5.0.1）
+- React 19 / TypeScript 6.0
+- Vite 8（`@vitejs/plugin-react`）
 - MUI 7（`@mui/material` / `@mui/icons-material`）
 - React Router 7
 - axios
-- Jest + React Testing Library
+- Vitest + React Testing Library（jsdom）
+- ESLint（フラット設定 `eslint.config.js`、typescript-eslint / react-hooks / react-refresh）
 
-> TypeScript は react-scripts 5 の対応範囲に合わせて 4.9 系を使用しています。
+> TypeScript は typescript-eslint の対応範囲（6.0 系）に合わせています。
 
 ## セットアップ
 
-Node.js 20 以上が必要です（React Router 7 の要件）。
+Node.js 22.12 以上が必要です（Vite 8 / Vitest の要件。CI も Node.js 22 を使用）。
 
 ```bash
 cd frontend
 npm ci
-npm start   # http://localhost:3000
+npm run dev   # http://localhost:3000
 ```
 
-バックエンド（Django）をローカルで `http://localhost:8000` に起動しておくと、API と接続して動作を確認できます。
+バックエンド（Django）をローカルで `http://127.0.0.1:8000` に起動しておくと、開発サーバーが `/api/...` へのリクエストを中継し（`vite.config.ts` の `server.proxy`）、API と接続して動作を確認できます。
 API に接続できない場合でも画面は表示され、学習進捗はブラウザの localStorage に保存されます。
 
 ## 環境変数
 
-CRA の仕様により、`REACT_APP_` で始まる変数がビルド時に埋め込まれます（秘密情報は設定しないでください）。
+Vite の仕様により、`VITE_` で始まる変数がビルド時に埋め込まれます（秘密情報は設定しないでください）。
+型定義は `src/vite-env.d.ts`、参照箇所は `src/lib/config.ts` に一元化しています。
 
 | 変数 | 内容 | 既定値 |
 |---|---|---|
-| `REACT_APP_API_BASE_URL` | 各画面が呼び出す API のベース URL（例: API Gateway の URL） | `http://localhost:8000` |
-| `REACT_APP_API_BASE` | axios の `baseURL`（相対パスでの呼び出し用） | `/` |
+| `VITE_API_BASE_URL` | API のベース URL（例: API Gateway の URL） | 空（同一オリジンの `/api/...` を呼び出す） |
 
-ローカルで値を変える場合は `frontend/.env.local` に記述します（Git 管理対象外）。
+ローカル開発では未設定のままで、Vite の proxy 経由でバックエンドに接続できます。
+別の API を使う場合は `frontend/.env.local` に記述します（Git 管理対象外）。
 
 ```bash
-REACT_APP_API_BASE_URL=http://localhost:8000
+VITE_API_BASE_URL=http://localhost:8000
 ```
 
 ## npm スクリプト
 
 | コマンド | 内容 |
 |---|---|
-| `npm start` | 開発サーバーを起動 |
-| `npm test` | テストをウォッチモードで実行 |
-| `npm run test:ci` | テストを 1 回だけ実行（CI 向け。`CI=true npm run test:ci`） |
+| `npm run dev` | 開発サーバーを起動（http://localhost:3000） |
+| `npm run build` | 型チェック後、本番用ビルドを `build/` に出力 |
+| `npm run preview` | ビルド結果をローカルで配信して確認 |
+| `npm run typecheck` | TypeScript の型チェック |
 | `npm run lint` | ESLint を実行（警告 0 件を必須） |
-| `npm run build` | 本番用ビルドを `build/` に出力 |
+| `npm test` | テストをウォッチモードで実行（Vitest） |
+| `npm run test:ci` | テストを 1 回だけ実行（CI 向け） |
 
 コード整形のルールは `.prettierrc` にまとめています（エディタの Prettier 連携で利用できます）。
 
@@ -64,7 +69,7 @@ src/
 ├─ ProgressHistory.tsx     # 学習履歴
 ├─ components/             # 背景アニメーション・チャット・フッター・ErrorBoundary
 ├─ hooks/                  # チャットクライアント・prefers-reduced-motion
-└─ lib/                    # HTTP エラー処理・localStorage ヘルパー
+└─ lib/                    # API 接続先の設定・HTTP エラー処理・localStorage ヘルパー
 ```
 
 ## エラーハンドリングとアクセシビリティ
@@ -77,7 +82,7 @@ src/
 ## ビルドとデプロイ
 
 ```bash
-REACT_APP_API_BASE_URL=<API のベース URL> npm run build
+VITE_API_BASE_URL=<API のベース URL> npm run build
 ```
 
 `build/` の内容を S3 にアップロードし、CloudFront から配信します。

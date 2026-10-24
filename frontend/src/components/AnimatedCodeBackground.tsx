@@ -3,7 +3,6 @@ import { usePrefersReducedMotion } from "../hooks/usePrefersReducedMotion";
 
 // 背景に表示するコード片（`${...}` は表示用の文字列としてそのまま描画する）
 const CODE_LINES = [
-  // eslint-disable-next-line no-template-curly-in-string
   "function hello(name) { return `Hello, ${name}`; }",
   "const sum = (a, b) => a + b;",
   "for (let i = 0; i < 10; i++) console.log(i);",
@@ -26,7 +25,7 @@ const AnimatedCodeBackground: React.FC = () => {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    let ctx: CanvasRenderingContext2D | null = null;
+    let ctx: CanvasRenderingContext2D | null;
     try {
       ctx = canvas.getContext("2d");
     } catch {

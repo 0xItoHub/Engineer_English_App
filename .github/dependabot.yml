@@ -40,6 +40,9 @@ updates:
       # TypeScript のメジャー更新は Lint ツールの対応状況を確認してから行う
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
+      # @types/node は実行環境（CI の Node.js 22）とメジャーバージョンを揃えて更新する
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   # GitHub Actions（.github/workflows）
   - package-ecosystem: github-actions

@@ -1,10 +1,10 @@
-import React from 'react';
+import { vi, type Mocked } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import axios from 'axios';
 import App from './App';
 
-jest.mock('axios');
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+vi.mock('axios');
+const mockedAxios = axios as Mocked<typeof axios>;
 
 beforeEach(() => {
   mockedAxios.get.mockImplementation((url: string) => {
@@ -16,7 +16,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  jest.resetAllMocks();
+  vi.resetAllMocks();
 });
 
 test('ヘッダー・メイン・フッターを表示し、トップにシーン一覧を表示する', async () => {

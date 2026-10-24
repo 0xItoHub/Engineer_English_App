@@ -14,7 +14,7 @@ import {
   Paper,
   LinearProgress
 } from "@mui/material";
-import { keyframes } from "@mui/system";
+import { keyframes } from "@mui/material/styles";
 import { 
   PlayArrow as PlayIcon,
   Book as BookIcon,
@@ -24,9 +24,7 @@ import {
 import AnimatedCodeBackground from "./components/AnimatedCodeBackground";
 import { isAbortError } from "./lib/http";
 import { readLocalProgress } from "./lib/storage";
-
-// APIのベースURL設定
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
+import { API_BASE_URL } from "./lib/config";
 
 // カルーセル用画像（public/images/ 配下に配置してください）
 const heroImages = [
@@ -46,8 +44,8 @@ type LessonLite = { id: number; title: string };
 type Scene = {
   id: number;
   title: string;
-  phrases?: any[];
-  dialogues?: any[];
+  phrases?: unknown[];
+  dialogues?: unknown[];
   lessons?: LessonLite[];
 };
 

@@ -75,7 +75,7 @@ terraform output api_invoke_url
   2. push したイメージを **ダイジェスト指定**（`<repo>@sha256:...`）で `aws lambda update-function-code` し、更新完了まで待機
   3. `API_BASE_URL` の `/` と `/api/scenes/` が 200 を返すことを確認（スモークテスト）
 - **フロントエンド**（`frontend/` の変更時）
-  1. Node.js 20 で `npm ci` → `REACT_APP_API_BASE_URL=$API_BASE_URL` を指定して `npm run build`
+  1. Node.js 22 で `npm ci` → `VITE_API_BASE_URL=$API_BASE_URL` を指定して `npm run build`（Vite）
   2. `aws s3 sync build/ s3://$FRONTEND_BUCKET --delete`
   3. CloudFront のキャッシュを無効化（`/*`）し、完了まで待機
 - 同時に複数のデプロイが走らないよう `concurrency: deploy-production` で直列化しています。

@@ -18,7 +18,7 @@ class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    if (process.env.NODE_ENV !== "test") {
+    if (import.meta.env.MODE !== "test") {
       console.error("[ErrorBoundary]", error, info.componentStack);
     }
   }

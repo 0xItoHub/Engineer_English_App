@@ -1,12 +1,12 @@
-import React from 'react';
+import { vi, type Mocked } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import axios from 'axios';
 import ScenesList from './ScenesList';
 import { LOCAL_PROGRESS_KEY } from './lib/storage';
 
-jest.mock('axios');
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+vi.mock('axios');
+const mockedAxios = axios as Mocked<typeof axios>;
 
 const scenes = [
   { id: 1, title: 'Daily Standup', phrases: [{}, {}], dialogues: [{}], lessons: [{ id: 10, title: 'L1' }, { id: 11, title: 'L2' }] },
@@ -26,7 +26,7 @@ function renderScenesList() {
 }
 
 afterEach(() => {
-  jest.resetAllMocks();
+  vi.resetAllMocks();
 });
 
 test('シーン一覧と進捗（サーバ＋ローカル）を表示する', async () => {

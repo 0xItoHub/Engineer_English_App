@@ -32,9 +32,7 @@ import {
 } from "@mui/icons-material";
 import { getErrorMessage, isAbortError } from "./lib/http";
 import { pushLocalProgress } from "./lib/storage";
-
-// APIのベースURL設定
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
+import { API_BASE_URL } from "./lib/config";
 
 type Lesson = {
   id: number;
@@ -166,14 +164,16 @@ const LessonDetail: React.FC = () => {
     try {
       const synth = window.speechSynthesis;
       if (synth?.speaking) synth.cancel();
-    } catch {}
+    } catch {
+      // 読み上げを停止できない環境では何もしない
+    }
     resetSpeaking();
   };
 
   useEffect(() => {
     return () => {
       // アンマウント時に停止
-      try { window.speechSynthesis?.cancel(); } catch {}
+      try { window.speechSynthesis?.cancel(); } catch { /* 読み上げ非対応の環境では何もしない */ }
     };
   }, []);
 

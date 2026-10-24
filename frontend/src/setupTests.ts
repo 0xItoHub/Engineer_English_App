@@ -1,12 +1,6 @@
-// jest-dom adds custom jest matchers for asserting on DOM nodes.
-// allows you to do things like:
-// expect(element).toHaveTextContent(/react/i)
-// learn more: https://github.com/testing-library/jest-dom
-import '@testing-library/jest-dom';
-import { TextEncoder, TextDecoder } from 'util';
-
-// react-router v7 が利用する TextEncoder / TextDecoder を jsdom 環境に補う
-Object.assign(globalThis, { TextEncoder, TextDecoder });
+// jest-dom のマッチャー（toBeInTheDocument など）を Vitest の expect に追加する
+// https://github.com/testing-library/jest-dom
+import '@testing-library/jest-dom/vitest';
 
 // jsdom には canvas が無いため、背景アニメーションは描画しない
 Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {

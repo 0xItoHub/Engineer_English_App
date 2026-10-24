@@ -26,7 +26,6 @@ import axios from "axios";
 axios.defaults.withCredentials = false;
 axios.defaults.xsrfCookieName = "csrftoken";
 axios.defaults.xsrfHeaderName = "X-CSRFToken";
-axios.defaults.baseURL = (process.env.REACT_APP_API_BASE as string) || "/";
 // 4xx / 5xx を一元的に処理（ログ出力とユーザー向けメッセージの付与）
 setupHttpInterceptors(axios);
 

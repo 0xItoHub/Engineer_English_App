@@ -1,12 +1,12 @@
-import React from 'react';
+import { vi, type Mocked } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import axios from 'axios';
 import SceneDetail from './SceneDetail';
 import { LOCAL_PROGRESS_KEY } from './lib/storage';
 
-jest.mock('axios');
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+vi.mock('axios');
+const mockedAxios = axios as Mocked<typeof axios>;
 
 const scene = {
   id: 1,
@@ -29,7 +29,7 @@ function renderSceneDetail(path = '/scene/1') {
 }
 
 afterEach(() => {
-  jest.resetAllMocks();
+  vi.resetAllMocks();
 });
 
 test('シーンのレッスン一覧とスコアを表示する', async () => {

@@ -20,6 +20,7 @@ deploy.ps1
 # Node / React
 frontend/node_modules/
 frontend/build/
+frontend/dist/
 
 # Terraform
 infra/.terraform/
