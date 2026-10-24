@@ -47,7 +47,7 @@ export function setupHttpInterceptors(instance: AxiosInstance = axios): void {
       if (error && typeof error === "object") {
         error.userMessage = messageForStatus(status);
       }
-      if (process.env.NODE_ENV !== "test") {
+      if (import.meta.env.MODE !== "test") {
         const method = error?.config?.method?.toUpperCase() ?? "";
         const url = error?.config?.url ?? "";
         const log = status && status < 500 ? console.warn : console.error;
