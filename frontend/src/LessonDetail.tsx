@@ -283,21 +283,17 @@ const LessonDetail: React.FC = () => {
     // スコアを100%を超えないように制限
     const calculatedScore = Math.round((completedSteps.length + 1) / steps.length * 100);
     const score = Math.min(calculatedScore, 100);
+    // 学習進捗はブラウザにも保存し、サーバーの保存状況に関わらず履歴に反映する
+    pushLocalProgress({ lesson: Number(lessonId), score, time_spent: timeSpent });
     try {
       setSaving(true);
-      const res = await axios.post(`${API_BASE_URL}/api/progress/complete_lesson/`, {
-        lesson_id: lessonId, score, time_spent: timeSpent
-      }).catch((e) => e.response);
-      if (!res || (res.status && res.status >= 400)) {
-        // 未ログインなどで保存されなかった場合はlocalStorageへ
-        pushLocalProgress({ lesson: Number(lessonId), score, time_spent: timeSpent });
-      }
+      await axios
+        .post(`${API_BASE_URL}/api/progress/complete_lesson/`, {
+          lesson_id: lessonId, score, time_spent: timeSpent
+        })
+        .catch(() => undefined);
       setSnackOpen(true);
       navigateTimerRef.current = setTimeout(() => navigate('/progress'), 1200);
-    } catch (err) {
-      // 念のためローカル保存
-      pushLocalProgress({ lesson: Number(lessonId), score, time_spent: timeSpent });
-      setSnackOpen(true);
     } finally {
       setSaving(false);
     }
