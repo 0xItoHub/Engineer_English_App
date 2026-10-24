@@ -59,3 +59,24 @@ variable "log_retention_days" {
   default     = 30
   description = "Lambda ロググループの保持日数（manage_lambda_log_group=true のとき有効）"
 }
+
+# ------------------------------------------------------------
+# ECR ライフサイクルポリシー
+# ------------------------------------------------------------
+variable "manage_ecr_lifecycle" {
+  type        = bool
+  default     = false
+  description = "true にすると ECR リポジトリにライフサイクルポリシーを設定する"
+}
+
+variable "ecr_keep_image_count" {
+  type        = number
+  default     = 10
+  description = "保持するタグ付きイメージの数（rollback- で始まるタグは対象外で常に保持）"
+}
+
+variable "ecr_untagged_expire_days" {
+  type        = number
+  default     = 14
+  description = "タグなしイメージを削除するまでの日数"
+}
