@@ -3,6 +3,7 @@ locals {
   api_host             = replace(aws_apigatewayv2_api.http_api.api_endpoint, "https://", "")
   allowed_hosts        = var.allowed_hosts != "" ? var.allowed_hosts : local.api_host
   cors_allowed_origins = var.cors_allowed_origins != "" ? var.cors_allowed_origins : try("https://${aws_cloudfront_distribution.frontend[0].domain_name}", "")
+  frontend_url         = try("https://${aws_cloudfront_distribution.frontend[0].domain_name}/", "")
 }
 
 resource "aws_lambda_function" "backend" {
@@ -19,6 +20,8 @@ resource "aws_lambda_function" "backend" {
       DJANGO_DEBUG                = var.django_debug
       DJANGO_ALLOWED_HOSTS        = local.allowed_hosts
       DJANGO_CORS_ALLOWED_ORIGINS = local.cors_allowed_origins
+      # API のトップ（/）へのアクセスの転送先
+      DJANGO_FRONTEND_URL = local.frontend_url
       # SECRET_KEY の値は SSM Parameter Store に置き、ここではパラメータ名のみ渡す
       DJANGO_SECRET_KEY_SSM_PARAM = var.secret_key_ssm_param_name
       SQLITE_PATH                 = var.sqlite_path
