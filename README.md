@@ -1,5 +1,7 @@
 # Engineer English App
 
+![CI](https://github.com/0xItoHub/Engineer_English_App/actions/workflows/ci.yml/badge.svg)
+
 エンジニアの実務シーンに沿って英語を学習できる Web アプリケーション（Django + React）
 
 - バックエンド: Django
@@ -42,6 +44,9 @@
 ├─ requirements.txt        # Python 依存
 └─ README.md
 ```
+
+## 開発
+ローカル環境のセットアップ、テスト・lint の実行方法、CI の構成は [DEVELOPMENT.md](DEVELOPMENT.md) を参照してください。環境変数の一覧は [.env.example](.env.example) にあります。
 
 ## AWS への最小デプロイ（サーバレス）
 サーバ側は **Lambda（コンテナ）+ API Gateway**、フロントは任意で **S3 静的サイト** を利用できます。
