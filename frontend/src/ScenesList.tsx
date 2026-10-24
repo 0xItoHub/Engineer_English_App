@@ -14,7 +14,7 @@ import {
   Paper,
   LinearProgress
 } from "@mui/material";
-import { keyframes } from "@mui/system";
+import { keyframes } from "@mui/material/styles";
 import { 
   PlayArrow as PlayIcon,
   Book as BookIcon,
