@@ -207,6 +207,8 @@ const SceneDetail: React.FC = () => {
                       }>
                         <ListItemText
                           primary={lesson.title}
+                          // secondary にブロック要素を含むため div として描画する
+                          slotProps={{ secondary: { component: 'div' } }}
                           secondary={
                             <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 2 }}>
                               <Box sx={{ position: 'relative', display: 'inline-flex' }}>
