@@ -40,10 +40,11 @@ python manage.py runserver
 ```bash
 cd frontend
 npm ci
-npm start   # http://localhost:3000
+npm run dev   # http://localhost:3000
 ```
 
-`frontend/package.json` の `proxy` 設定により、開発サーバから `/api/...` へのリクエストは `http://127.0.0.1:8000` のバックエンドへ転送されます。先にバックエンドを起動しておいてください。
+フロントエンドは Vite で構成しています（Node.js 22.12 以上）。`frontend/vite.config.ts` の `server.proxy` 設定により、開発サーバから `/api/...` へのリクエストは `http://127.0.0.1:8000` のバックエンドへ転送されます。先にバックエンドを起動しておいてください。
+API の接続先は `VITE_API_BASE_URL`（ビルド時に埋め込み）で指定でき、未設定なら同一オリジンの `/api/...` を呼び出します。
 
 ## テストと lint
 
@@ -61,8 +62,9 @@ ruff と pytest の設定は `pyproject.toml` にまとめています。
 
 ```bash
 cd frontend
-npm run lint
-npm run test:ci   # 1 回だけ実行（watch なし）
+npm run lint        # ESLint（警告 0 件）
+npm run typecheck   # TypeScript の型チェック
+npm run test:ci     # Vitest を 1 回だけ実行（watch なし）
 npm run build
 ```
 

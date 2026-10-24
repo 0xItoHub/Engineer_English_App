@@ -37,7 +37,7 @@
 .
 ├─ engineer_english/       # Django プロジェクト
 ├─ core/                   # アプリ（モデル/シリアライザ/ビュー等）
-├─ frontend/               # React (CRA) フロント
+├─ frontend/               # React (Vite) フロント
 ├─ infra/                  # Terraform (Lambda+APIGW+S3 の最小構成)
 ├─ lambda.py               # Lambda ハンドラ（Mangum）
 ├─ Dockerfile.lambda       # Lambda 用コンテナ Dockerfile
