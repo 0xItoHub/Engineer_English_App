@@ -1,0 +1,215 @@
+# 本番環境への自動デプロイ
+# - バックエンド: Lambda コンテナイメージを ECR へ push（SHA タグ）→ ダイジェスト指定で Lambda を更新 → スモークテスト
+# - フロントエンド: CRA をビルド → S3 へ同期 → CloudFront のキャッシュを無効化
+#
+# AWS 認証は OIDC（infra/github_oidc.tf のデプロイ用ロール）を使用し、長期のアクセスキーは使わない。
+# 必要な値はすべて GitHub のリポジトリ変数（vars.*）で設定する。設定方法は infra/README.md を参照。
+# AWS_DEPLOY_ROLE_ARN が未設定の間は各ジョブはスキップされる。
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "core/**"
+      - "engineer_english/**"
+      - "templates/**"
+      - "lambda.py"
+      - "manage.py"
+      - "requirements.txt"
+      - "Dockerfile.lambda"
+      - ".dockerignore"
+      - "frontend/**"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "デプロイ対象"
+        type: choice
+        options: [all, backend, frontend]
+        default: all
+
+permissions:
+  id-token: write
+  contents: read
+
+# 本番へのデプロイは常に1つずつ実行する（実行中のデプロイは中断しない）
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  changes:
+    name: Detect changes
+    if: vars.AWS_DEPLOY_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: filter
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          TARGET: ${{ inputs.target }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          backend=false
+          frontend=false
+          if [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
+            case "${TARGET}" in
+              all) backend=true; frontend=true ;;
+              backend) backend=true ;;
+              frontend) frontend=true ;;
+            esac
+          elif [ -z "${BEFORE_SHA}" ] || ! git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null; then
+            # 比較元が取得できない場合（初回 push など）は両方デプロイする
+            backend=true
+            frontend=true
+          else
+            changed="$(git diff --name-only "${BEFORE_SHA}" "${GITHUB_SHA}")"
+            echo "Changed files:"
+            echo "${changed}"
+            if echo "${changed}" | grep -Eq '^(core/|engineer_english/|templates/|lambda\.py$|manage\.py$|requirements\.txt$|Dockerfile\.lambda$|\.dockerignore$|\.github/workflows/deploy\.yml$)'; then
+              backend=true
+            fi
+            if echo "${changed}" | grep -Eq '^(frontend/|\.github/workflows/deploy\.yml$)'; then
+              frontend=true
+            fi
+          fi
+          echo "backend=${backend}" >> "${GITHUB_OUTPUT}"
+          echo "frontend=${frontend}" >> "${GITHUB_OUTPUT}"
+
+  backend:
+    name: Deploy backend (Lambda)
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+      LAMBDA_FUNCTION_NAME: ${{ vars.LAMBDA_FUNCTION_NAME }}
+      API_BASE_URL: ${{ vars.API_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image (immutable SHA tag)
+        id: image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_SHA::12}"
+          image="${REGISTRY}/${ECR_REPOSITORY}:${tag}"
+          # Lambda は単一アーキテクチャのマニフェストを使うため provenance は無効化する
+          docker buildx build \
+            --platform linux/amd64 \
+            --provenance=false \
+            --file Dockerfile.lambda \
+            --tag "${image}" \
+            --load \
+            .
+          docker push "${image}"
+          digest_ref="$(docker inspect --format='{{index .RepoDigests 0}}' "${image}")"
+          echo "Pushed ${image} (${digest_ref})"
+          echo "image_uri=${digest_ref}" >> "${GITHUB_OUTPUT}"
+
+      - name: Update Lambda function code
+        env:
+          IMAGE_URI: ${{ steps.image.outputs.image_uri }}
+        run: |
+          set -euo pipefail
+          aws lambda update-function-code \
+            --function-name "${LAMBDA_FUNCTION_NAME}" \
+            --image-uri "${IMAGE_URI}" \
+            --query 'LastUpdateStatus' --output text
+          aws lambda wait function-updated-v2 --function-name "${LAMBDA_FUNCTION_NAME}"
+          aws lambda get-function-configuration \
+            --function-name "${LAMBDA_FUNCTION_NAME}" \
+            --query '{State: State, LastUpdateStatus: LastUpdateStatus}' --output table
+
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          base="${API_BASE_URL%/}"
+          for path in "/" "/api/scenes/"; do
+            ok=false
+            for attempt in 1 2 3 4 5; do
+              status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "${base}${path}" || true)"
+              echo "GET ${path} -> ${status} (attempt ${attempt})"
+              if [ "${status}" = "200" ]; then
+                ok=true
+                break
+              fi
+              sleep 10
+            done
+            if [ "${ok}" != "true" ]; then
+              echo "::error::Smoke test failed for ${path}"
+              exit 1
+            fi
+          done
+
+  frontend:
+    name: Deploy frontend (S3 + CloudFront)
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true' && vars.FRONTEND_BUCKET != ''
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      FRONTEND_BUCKET: ${{ vars.FRONTEND_BUCKET }}
+      CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        env:
+          REACT_APP_API_BASE_URL: ${{ vars.API_BASE_URL }}
+        run: npm run build
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Sync to S3
+        run: aws s3 sync build/ "s3://${FRONTEND_BUCKET}" --delete
+
+      - name: Invalidate CloudFront cache
+        if: env.CLOUDFRONT_DISTRIBUTION_ID != ''
+        run: |
+          set -euo pipefail
+          id="$(aws cloudfront create-invalidation \
+            --distribution-id "${CLOUDFRONT_DISTRIBUTION_ID}" \
+            --paths '/*' \
+            --query 'Invalidation.Id' --output text)"
+          echo "Created invalidation ${id}"
+          aws cloudfront wait invalidation-completed \
+            --distribution-id "${CLOUDFRONT_DISTRIBUTION_ID}" --id "${id}"

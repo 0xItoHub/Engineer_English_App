@@ -25,6 +25,13 @@ resource "aws_lambda_function" "backend" {
       STARTUP_COPY_SEED_DB        = var.startup_copy_seed_db
     }
   }
+
+  # イメージの更新は GitHub Actions（.github/workflows/deploy.yml）が SHA タグ／ダイジェスト指定で行う。
+  # CI でデプロイしたイメージを Terraform が lambda_image_uri の値に戻さないよう、image_uri は差分対象外とする。
+  # 手動でイメージを切り替える場合は aws lambda update-function-code を使う（infra/README.md 参照）。
+  lifecycle {
+    ignore_changes = [image_uri]
+  }
 }
 
 resource "aws_apigatewayv2_api" "http_api" {
