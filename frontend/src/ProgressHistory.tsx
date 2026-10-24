@@ -1,12 +1,10 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import React, { useMemo } from "react";
+import { useNavigate } from "react-router";
 import {
   Card,
   CardContent,
   Typography,
   CircularProgress,
-  Alert,
   Box,
   Button,
   Paper,
@@ -27,7 +25,7 @@ import {
   AccessTime as AccessTimeIcon
 } from "@mui/icons-material";
 import { readLocalProgress } from "./lib/storage";
-import { API_BASE_URL } from "./lib/config";
+import { useMyProgressQuery, useScenesQuery, type Scene, type ServerProgress } from "./lib/queries";
 
 type Progress = {
   id?: number; // サーバのみ
@@ -39,12 +37,10 @@ type Progress = {
   time_spent: number;
 };
 
-type SceneLite = { id: number; title: string; lessons?: { id: number; title: string }[] };
-
 // ローカル保存分（壊れたデータは除外して読み込む）
 const readLocal = readLocalProgress;
 
-const buildLessonMap = (scenes: SceneLite[]): Map<number, { lesson_title: string; scene_title: string }> => {
+const buildLessonMap = (scenes: Scene[]): Map<number, { lesson_title: string; scene_title: string }> => {
   const map = new Map<number, { lesson_title: string; scene_title: string }>();
   for (const s of scenes || []) {
     for (const l of s.lessons || []) {
@@ -54,64 +50,44 @@ const buildLessonMap = (scenes: SceneLite[]): Map<number, { lesson_title: string
   return map;
 };
 
+// サーバの進捗を表示用の形式にそろえる
+const toProgress = (p: ServerProgress): Progress => ({
+  id: p.id,
+  lesson: p.lesson,
+  lesson_title: p.lesson_title ?? `Lesson #${p.lesson}`,
+  scene_title: p.scene_title ?? "",
+  completed_at: p.completed_at ?? new Date().toISOString(),
+  score: p.score,
+  time_spent: p.time_spent,
+});
+
 const ProgressHistory: React.FC = () => {
   const navigate = useNavigate();
-  const [progress, setProgress] = useState<Progress[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const progressQuery = useMyProgressQuery();
+  // シーン一覧はホーム画面と共有し、ローカル進捗のタイトル補完に使う
+  const scenesQuery = useScenesQuery();
+  const loading = progressQuery.isPending || scenesQuery.isPending;
 
-  const fetchProgress = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const [progressRes, scenesRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/api/progress/my_progress/`, { signal }).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE_URL}/api/scenes/`, { signal }).catch(() => ({ data: [] })),
-      ]);
-      if (signal?.aborted) return;
-      const server: Progress[] = Array.isArray(progressRes.data) ? progressRes.data : [];
-      const scenes: SceneLite[] = Array.isArray(scenesRes.data) ? scenesRes.data : [];
-      const lessonMap = buildLessonMap(scenes);
+  const progress = useMemo<Progress[]>(() => {
+    const server = (progressQuery.data ?? []).map(toProgress);
+    // サーバダウン時はシーン一覧が空となり、タイトルはフォールバック表示になる
+    const lessonMap = buildLessonMap(scenesQuery.data ?? []);
 
-      // ローカル分をタイトル補完してProgress形式へ
-      const local = readLocal();
-      const localAsProgress: Progress[] = local.map((x) => {
-        const info = lessonMap.get(x.lesson);
-        return {
-          lesson: x.lesson,
-          lesson_title: info?.lesson_title || `Lesson #${x.lesson}`,
-          scene_title: info?.scene_title || "(未同期)",
-          completed_at: new Date().toISOString(),
-          score: x.score,
-          time_spent: x.time_spent,
-        };
-      });
-
-      const merged = [...server, ...localAsProgress];
-      setProgress(merged);
-      setLoading(false);
-    } catch {
-      if (signal?.aborted) return;
-      // サーバダウン時はローカルのみ表示（タイトルはフォールバック）
-      const local = readLocal();
-      const localAsProgress: Progress[] = local.map((x) => ({
+    // ローカル分をタイトル補完してProgress形式へ
+    const localAsProgress: Progress[] = readLocal().map((x) => {
+      const info = lessonMap.get(x.lesson);
+      return {
         lesson: x.lesson,
-        lesson_title: `Lesson #${x.lesson}`,
-        scene_title: "(未同期)",
+        lesson_title: info?.lesson_title || `Lesson #${x.lesson}`,
+        scene_title: info?.scene_title || "(未同期)",
         completed_at: new Date().toISOString(),
         score: x.score,
         time_spent: x.time_spent,
-      }));
-      setProgress(localAsProgress);
-      setError(null);
-      setLoading(false);
-    }
-  }, []);
+      };
+    });
 
-  useEffect(() => {
-    // 画面を離れたらリクエストを中断し、アンマウント後の state 更新を防ぐ
-    const controller = new AbortController();
-    fetchProgress(controller.signal);
-    return () => controller.abort();
-  }, [fetchProgress]);
+    return [...server, ...localAsProgress];
+  }, [progressQuery.data, scenesQuery.data]);
 
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
@@ -138,17 +114,9 @@ const ProgressHistory: React.FC = () => {
 
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
         <CircularProgress size={60} aria-label="読み込み中" />
       </Box>
-    );
-  }
-
-  if (error) {
-    return (
-      <Alert severity="error" sx={{ mt: 2 }}>
-        {error}
-      </Alert>
     );
   }
 
@@ -231,7 +199,7 @@ const ProgressHistory: React.FC = () => {
                 <TableBody>
                   {progress.map((item, idx) => (
                     <TableRow key={item.id ?? `local-${idx}`}>
-                      <TableCell><Typography variant="body1" fontWeight="bold">{item.lesson_title}</Typography></TableCell>
+                      <TableCell><Typography variant="body1" sx={{ fontWeight: 'bold' }}>{item.lesson_title}</Typography></TableCell>
                       <TableCell><Chip label={item.scene_title} size="small" color="primary" /></TableCell>
                       <TableCell><Typography variant="body2" color="text.secondary">{formatDate(item.completed_at)}</Typography></TableCell>
                       <TableCell>

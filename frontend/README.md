@@ -7,9 +7,10 @@
 
 - React 19 / TypeScript 6.0
 - Vite 8（`@vitejs/plugin-react`）
-- MUI 7（`@mui/material` / `@mui/icons-material`）
-- React Router 7
-- axios
+- MUI 9（`@mui/material` / `@mui/icons-material`）
+- TanStack Query 5（API レスポンスのキャッシュ・画面間での共有）
+- React Router 8（`react-router`）
+- axios（インターセプターでエラーを一元処理）
 - Vitest + React Testing Library（jsdom）
 - ESLint（フラット設定 `eslint.config.js`、typescript-eslint / react-hooks / react-refresh）
 
@@ -17,7 +18,7 @@
 
 ## セットアップ
 
-Node.js 22.12 以上が必要です（Vite 8 / Vitest の要件。CI も Node.js 22 を使用）。
+Node.js 22.22 以上が必要です（Vite 8 / React Router 8 の要件。CI も Node.js 22 を使用）。
 
 ```bash
 cd frontend
@@ -35,10 +36,14 @@ Vite の仕様により、`VITE_` で始まる変数がビルド時に埋め込�
 
 | 変数 | 内容 | 既定値 |
 |---|---|---|
-| `VITE_API_BASE_URL` | API のベース URL（例: API Gateway の URL） | 空（同一オリジンの `/api/...` を呼び出す） |
+| `VITE_API_BASE_URL` | API のベース URL（任意。別オリジンの API を呼び出す場合のみ指定） | 空（同一オリジンの `/api/...` を呼び出す） |
 
-ローカル開発では未設定のままで、Vite の proxy 経由でバックエンドに接続できます。
-別の API を使う場合は `frontend/.env.local` に記述します（Git 管理対象外）。
+本番環境・ローカル開発ともに、通常は未設定のままで利用します。
+
+- 本番環境: CloudFront が SPA と `/api/*`（バックエンドへの中継）を同一オリジンで配信するため、相対パスの `/api/...` で API に接続します。
+- ローカル開発: Vite の proxy（`npm run dev` / `npm run preview`）経由でバックエンドに接続します。
+
+別オリジンの API を使う場合は `frontend/.env.local` に記述します（Git 管理対象外）。
 
 ```bash
 VITE_API_BASE_URL=http://localhost:8000
@@ -63,14 +68,25 @@ VITE_API_BASE_URL=http://localhost:8000
 ```
 src/
 ├─ App.tsx                 # ルーティング・テーマ・共通レイアウト
-├─ ScenesList.tsx          # シーン一覧（トップ）
+├─ ScenesList.tsx          # ホーム（概要・収録コンテンツ数・シーン一覧・技術スタック）
 ├─ SceneDetail.tsx         # シーン詳細（レッスン一覧）
 ├─ LessonDetail.tsx        # レッスン（フレーズ・対話・読み上げ）
 ├─ ProgressHistory.tsx     # 学習履歴
-├─ components/             # 背景アニメーション・チャット・フッター・ErrorBoundary
+├─ components/             # 背景アニメーション・ホーム画面の各セクション・チャット・フッター・ErrorBoundary
 ├─ hooks/                  # チャットクライアント・prefers-reduced-motion
-└─ lib/                    # API 接続先の設定・HTTP エラー処理・localStorage ヘルパー
+├─ lib/                    # API 接続先の設定・データ取得（queries.ts）・HTTP エラー処理・localStorage ヘルパー
+└─ test/                   # テスト用の描画ヘルパー（QueryClientProvider 付き）
 ```
+
+## データ取得
+
+API の取得処理は TanStack Query で管理し、クエリキーとクエリ関数を `src/lib/queries.ts` にまとめています。
+
+- `/api/scenes/` の結果はホーム・シーン詳細・学習履歴で共有し、収録コンテンツ数もこの結果から集計します。
+- 教材データ（シーン・レッスン）は 5 分間キャッシュを再利用し、学習進捗は画面表示ごとに最新を取得します。
+- 取得に失敗した場合は 1 回だけ再試行します（4xx は再試行しません）。
+- 画面遷移などで不要になったリクエストは、クエリの `signal` により中断されます。
+- レッスン完了時は、進捗をブラウザに保存したうえでサーバに送信します（`useMutation`）。
 
 ## エラーハンドリングとアクセシビリティ
 
@@ -82,8 +98,11 @@ src/
 ## ビルドとデプロイ
 
 ```bash
-VITE_API_BASE_URL=<API のベース URL> npm run build
+npm run build
 ```
 
 `build/` の内容を S3 にアップロードし、CloudFront から配信します。
+API は同一オリジンの `/api/...` で呼び出すため、通常は `VITE_API_BASE_URL` を指定せずにビルドします。
+
+ビルド結果をローカルで確認する場合は、バックエンドを `http://127.0.0.1:8000` で起動したうえで `npm run preview` を実行します（`/api` は開発サーバーと同じくバックエンドへ中継されます）。
 インフラ構成とデプロイ手順の詳細は [ルートの README](../README.md) を参照してください。

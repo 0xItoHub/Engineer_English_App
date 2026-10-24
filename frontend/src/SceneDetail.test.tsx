@@ -1,9 +1,11 @@
 import { vi, type Mocked } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { fireEvent, screen } from '@testing-library/react';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import axios from 'axios';
 import SceneDetail from './SceneDetail';
 import { LOCAL_PROGRESS_KEY } from './lib/storage';
+import { createTestQueryClient, renderWithClient } from './test/renderWithClient';
+import { queryKeys } from './lib/queries';
 
 vi.mock('axios');
 const mockedAxios = axios as Mocked<typeof axios>;
@@ -18,7 +20,7 @@ const scene = {
 };
 
 function renderSceneDetail(path = '/scene/1') {
-  return render(
+  return renderWithClient(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/scene/:id" element={<SceneDetail />} />
@@ -65,4 +67,25 @@ test('シーンが見つからない場合は分かりやすいエラーを表�
   renderSceneDetail('/scene/999');
 
   expect(await screen.findByText('Scene取得エラー: お探しのデータが見つかりませんでした。')).toBeInTheDocument();
+});
+
+test('取得済みのシーン一覧があれば、その内容をすぐに表示する', async () => {
+  mockedAxios.get.mockImplementation((url: string) =>
+    url.endsWith('/api/progress/my_progress/') ? Promise.resolve({ data: [] }) : new Promise(() => {})
+  );
+  const client = createTestQueryClient();
+  client.setQueryData(queryKeys.scenes, [scene]);
+
+  renderWithClient(
+    <MemoryRouter initialEntries={['/scene/1']}>
+      <Routes>
+        <Route path="/scene/:id" element={<SceneDetail />} />
+      </Routes>
+    </MemoryRouter>,
+    client
+  );
+
+  // シーン詳細の応答を待たずに、一覧のキャッシュから表示できる
+  expect(await screen.findByRole('heading', { level: 1, name: /Daily Standup/ })).toBeInTheDocument();
+  expect(screen.getByText('レッスン (2)')).toBeInTheDocument();
 });

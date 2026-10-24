@@ -1,9 +1,10 @@
 import { vi, type Mocked } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { fireEvent, screen, within } from '@testing-library/react';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import axios from 'axios';
 import ScenesList from './ScenesList';
 import { LOCAL_PROGRESS_KEY } from './lib/storage';
+import { renderWithClient } from './test/renderWithClient';
 
 vi.mock('axios');
 const mockedAxios = axios as Mocked<typeof axios>;
@@ -14,7 +15,7 @@ const scenes = [
 ];
 
 function renderScenesList() {
-  return render(
+  return renderWithClient(
     <MemoryRouter initialEntries={['/']}>
       <Routes>
         <Route path="/" element={<ScenesList />} />
@@ -46,6 +47,39 @@ test('シーン一覧と進捗（サーバ＋ローカル）を表示する', as
   expect(screen.getByRole('progressbar', { name: 'Daily Standup の進捗' })).toHaveAttribute('aria-valuenow', '100');
 });
 
+test('シーン一覧から集計した教材の数（シーン・レッスン・フレーズ・対話）を表示する', async () => {
+  mockedAxios.get.mockImplementation((url: string) =>
+    url.endsWith('/api/scenes/') ? Promise.resolve({ data: scenes }) : Promise.reject(new Error('403'))
+  );
+
+  renderScenesList();
+
+  const section = await screen.findByRole('region', { name: '収録コンテンツ' });
+  expect(within(section).getAllByRole('listitem')).toHaveLength(4);
+  expect(within(screen.getByTestId('stat-scenes')).getByText('2')).toBeInTheDocument();
+  expect(within(screen.getByTestId('stat-scenes')).getByText('シーン')).toBeInTheDocument();
+  expect(within(screen.getByTestId('stat-lessons')).getByText('2')).toBeInTheDocument();
+  expect(within(screen.getByTestId('stat-phrases')).getByText('2')).toBeInTheDocument();
+  expect(within(screen.getByTestId('stat-dialogues')).getByText('1')).toBeInTheDocument();
+});
+
+test('概要・技術スタックを表示し、「学習をはじめる」でシーン一覧へ移動する', async () => {
+  mockedAxios.get.mockImplementation((url: string) =>
+    url.endsWith('/api/scenes/') ? Promise.resolve({ data: scenes }) : Promise.reject(new Error('403'))
+  );
+  const scrollIntoView = vi.fn();
+  Element.prototype.scrollIntoView = scrollIntoView;
+
+  renderScenesList();
+
+  expect(await screen.findByRole('heading', { level: 2, name: 'エンジニアのための、実務に効く英語学習' })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { level: 2, name: '技術スタック' })).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('link', { name: '学習をはじめる' }));
+  expect(scrollIntoView).toHaveBeenCalled();
+  expect(document.getElementById('scene-list')).toHaveFocus();
+});
+
 test('「学習開始」でシーン詳細へ遷移する', async () => {
   mockedAxios.get.mockImplementation((url: string) =>
     url.endsWith('/api/scenes/') ? Promise.resolve({ data: scenes }) : Promise.reject(new Error('403'))
@@ -64,4 +98,6 @@ test('API に接続できない場合も空の状態を表示する（ローカ�
   renderScenesList();
 
   expect(await screen.findByText('まだシーンが登録されていません')).toBeInTheDocument();
+  // 集計できるデータが無いときは教材の数を表示しない
+  expect(screen.queryByRole('region', { name: '収録コンテンツ' })).not.toBeInTheDocument();
 });

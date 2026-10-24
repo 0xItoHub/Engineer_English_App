@@ -80,7 +80,7 @@ const ChatWidget: React.FC = () => {
           sx={{ position: "fixed", right: 24, bottom: 96, width: { xs: '90vw', sm: 420 }, height: { xs: '70vh', sm: '70vh' }, outline: 'none' }}
         >
           <Paper elevation={6} sx={{ p: 1.5, display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+            <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
               <Typography id="chat-dialog-title" variant="subtitle1" component="h2" sx={{ fontWeight: 600 }}>AI Chat</Typography>
               <IconButton size="small" onClick={close} aria-label="チャットを閉じる"><CloseIcon /></IconButton>
             </Stack>
@@ -109,7 +109,7 @@ const ChatWidget: React.FC = () => {
                           borderColor: 'divider',
                         }}
                       >
-                        <Typography variant="body2" whiteSpace="pre-wrap">{m.content}</Typography>
+                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{m.content}</Typography>
                       </Paper>
                     </Box>
                   );
