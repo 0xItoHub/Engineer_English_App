@@ -23,14 +23,14 @@ const HomeHero: React.FC<Props> = ({ targetId }) => {
       component="section"
       aria-labelledby="home-hero-title"
       elevation={0}
-      sx={{ p: { xs: 3, sm: 4 }, mb: 4, bgcolor: "primary.main", color: "primary.contrastText", borderRadius: 0 }}
+      sx={{ p: { xs: 3, sm: 4 }, mb: 4, bgcolor: "primary.main", color: "primary.contrastText" }}
     >
       <Typography id="home-hero-title" variant="h5" component="h2" sx={{ mb: 1 }}>
         エンジニアのための、実務に効く英語学習
       </Typography>
       <Typography variant="body1" sx={{ color: "#dbeafe", lineHeight: 1.8, maxWidth: 760 }}>
-        要件定義から運用・保守まで、開発プロセスに沿ったシーンとレッスンで英語を習得。
-        実務で使える表現を音声読み上げと対話練習で身につけ、学習の進捗は自動で記録されます。
+        {"要件定義から運用・保守まで、開発プロセスに沿ったシーンとレッスンで英語を習得。"}
+        {"実務で使える表現を音声読み上げと対話練習で身につけ、学習の進捗は自動で記録されます。"}
       </Typography>
       <Box sx={{ mt: 2.5 }}>
         <Button

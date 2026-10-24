@@ -162,12 +162,14 @@ export function useLessonQuery(id: number | undefined) {
   });
 }
 
-// 学習進捗はレッスン完了のたびに変わるため、画面表示ごとに最新を取得する
+// 学習進捗は短い間隔で再取得する（レッスン完了時はキャッシュを更新して即時に反映）
+const PROGRESS_STALE_TIME = 30 * 1000;
+
 export function useMyProgressQuery() {
   return useQuery({
     queryKey: queryKeys.myProgress,
     queryFn: ({ signal }) => fetchMyProgress(signal),
-    staleTime: 0,
+    staleTime: PROGRESS_STALE_TIME,
   });
 }
 
