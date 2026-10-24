@@ -95,7 +95,7 @@ pre-commit run --all-files   # 初回や設定変更時に全ファイルへ実�
 | ジョブ | 内容 |
 |---|---|
 | backend | ruff（lint / format）、`manage.py check`、pytest（カバレッジ付き）、`pip-audit -r requirements.txt` |
-| frontend | `npm ci`、lint、テスト、ビルド、`npm audit --omit=dev --audit-level=high` |
+| frontend | `npm ci`、lint、テスト、ビルド、`npm audit --omit=dev --audit-level=critical` |
 | terraform | `terraform fmt -check`、`init -backend=false`、`validate` |
 | docker-build | `Dockerfile.lambda` のビルド確認（push はしない） |
 
