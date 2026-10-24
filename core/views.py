@@ -16,7 +16,8 @@ from .serializers import (
 
 
 class SceneViewSet(viewsets.ModelViewSet):
-    queryset = Scene.objects.all()
+    # ネストしたフレーズ・対話・レッスンをまとめて取得し、シーン数に依存しないクエリ数にする
+    queryset = Scene.objects.prefetch_related("phrases", "dialogues", "lessons")
     serializer_class = SceneSerializer
 
 
@@ -53,6 +54,13 @@ class DialogueViewSet(viewsets.ModelViewSet):
 class LessonViewSet(viewsets.ModelViewSet):
     queryset = Lesson.objects.all()
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        # 詳細取得ではレッスン内のフレーズ・対話をまとめて取得する
+        if getattr(self, "action", None) == "retrieve":
+            qs = qs.prefetch_related("lesson_phrases", "lesson_dialogues")
+        return qs
+
     def get_serializer_class(self):
         # 詳細取得（/lessons/:id/）ではフレーズ・対話を含む詳細シリアライザを返す
         if getattr(self, "action", None) == "retrieve":
@@ -61,7 +69,8 @@ class LessonViewSet(viewsets.ModelViewSet):
 
 
 class UserProgressViewSet(viewsets.ModelViewSet):
-    queryset = UserProgress.objects.all()
+    # シリアライザで参照するレッスン・シーン・ユーザーを JOIN で同時に取得する
+    queryset = UserProgress.objects.select_related("lesson__scene", "user")
     serializer_class = UserProgressSerializer
 
     def perform_create(self, serializer):
@@ -70,7 +79,7 @@ class UserProgressViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"])
     def my_progress(self, request):
         if request.user.is_authenticated:
-            progress = UserProgress.objects.filter(user=request.user)
+            progress = self.get_queryset().filter(user=request.user)
         else:
             progress = UserProgress.objects.none()
         serializer = self.get_serializer(progress, many=True)
