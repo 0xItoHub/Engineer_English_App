@@ -28,6 +28,8 @@ import {
   VolumeUp as VolumeUpIcon,
   StopCircle as StopCircleIcon
 } from "@mui/icons-material";
+import { getErrorMessage, isAbortError } from "./lib/http";
+import { pushLocalProgress } from "./lib/storage";
 
 // APIのベースURL設定
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
@@ -60,24 +62,6 @@ type Dialogue = {
   line_ja: string;
   order: number;
 };
-
-const LOCAL_PROGRESS_KEY = "ee_local_progress";
-
-function pushLocalProgress(item: { lesson: number; score: number; time_spent: number }) {
-  try {
-    const raw = localStorage.getItem(LOCAL_PROGRESS_KEY);
-    const list = raw ? JSON.parse(raw) : [];
-    // 既存の同lessonを上書き（scoreは高い方）
-    const idx = list.findIndex((x: any) => x.lesson === item.lesson);
-    if (idx >= 0) {
-      list[idx].score = Math.max(list[idx].score, item.score);
-      list[idx].time_spent = item.time_spent;
-    } else {
-      list.push(item);
-    }
-    localStorage.setItem(LOCAL_PROGRESS_KEY, JSON.stringify(list));
-  } catch {}
-}
 
 const LessonDetail: React.FC = () => {
   const { lessonId } = useParams<{ lessonId: string }>();
@@ -191,24 +175,38 @@ const LessonDetail: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (lessonId) {
-      setStartTime(new Date());
-      axios
-        .get(`${API_BASE_URL}/api/lessons/${lessonId}/`)
-        .then((res) => {
-          setLesson(res.data);
-          return axios.get(`${API_BASE_URL}/api/scenes/${res.data.scene}/`);
-        })
-        .then((res) => {
-          setScene(res.data);
-          setLoading(false);
-        })
-        .catch((err) => {
-          setError("レッスン取得エラー: " + err.message);
-          setLoading(false);
-        });
-    }
+    if (!lessonId) return;
+    // 画面遷移時はリクエストを中断し、アンマウント後の state 更新を防ぐ
+    const controller = new AbortController();
+    const { signal } = controller;
+    setStartTime(new Date());
+    axios
+      .get(`${API_BASE_URL}/api/lessons/${lessonId}/`, { signal })
+      .then((res) => {
+        if (signal.aborted) return null;
+        setLesson(res.data);
+        return axios.get(`${API_BASE_URL}/api/scenes/${res.data.scene}/`, { signal });
+      })
+      .then((res) => {
+        if (!res || signal.aborted) return;
+        setScene(res.data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (signal.aborted || isAbortError(err)) return;
+        setError("レッスン取得エラー: " + getErrorMessage(err));
+        setLoading(false);
+      });
+    return () => controller.abort();
   }, [lessonId]);
+
+  // 完了後の画面遷移タイマー（アンマウント時に解除）
+  const navigateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (navigateTimerRef.current) clearTimeout(navigateTimerRef.current);
+    };
+  }, []);
 
   const steps = [
     "レッスン概要",
@@ -240,13 +238,13 @@ const LessonDetail: React.FC = () => {
       setSaving(true);
       const res = await axios.post(`${API_BASE_URL}/api/progress/complete_lesson/`, {
         lesson_id: lessonId, score, time_spent: timeSpent
-      }, { withCredentials: true }).catch((e) => e.response);
+      }).catch((e) => e.response);
       if (!res || (res.status && res.status >= 400)) {
         // 未ログインなどで保存されなかった場合はlocalStorageへ
         pushLocalProgress({ lesson: Number(lessonId), score, time_spent: timeSpent });
       }
       setSnackOpen(true);
-      setTimeout(() => navigate('/progress'), 1200);
+      navigateTimerRef.current = setTimeout(() => navigate('/progress'), 1200);
     } catch (err) {
       // 念のためローカル保存
       pushLocalProgress({ lesson: Number(lessonId), score, time_spent: timeSpent });

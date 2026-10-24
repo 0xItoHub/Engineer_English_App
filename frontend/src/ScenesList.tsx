@@ -22,6 +22,8 @@ import {
   TrendingUp as TrendingUpIcon
 } from "@mui/icons-material";
 import AnimatedCodeBackground from "./components/AnimatedCodeBackground";
+import { isAbortError } from "./lib/http";
+import { readLocalProgress } from "./lib/storage";
 
 // APIのベースURL設定
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
@@ -38,8 +40,6 @@ const slide = keyframes`
   0% { transform: translateX(0); }
   100% { transform: translateX(-50%); }
 `;
-
-const LOCAL_PROGRESS_KEY = "ee_local_progress";
 
 type LessonLite = { id: number; title: string };
 
@@ -65,17 +65,6 @@ const ScenesList: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  function readLocalProgress(): ProgressEntry[] {
-    try {
-      const raw = localStorage.getItem(LOCAL_PROGRESS_KEY);
-      if (!raw) return [];
-      const list = JSON.parse(raw) as ProgressEntry[];
-      return Array.isArray(list) ? list : [];
-    } catch {
-      return [];
-    }
-  }
-
   function mergeProgress(serverList: ProgressEntry[], localList: ProgressEntry[]): ProgressEntry[] {
     const map = new Map<number, ProgressEntry>();
     for (const p of serverList) map.set(p.lesson, { ...p });
@@ -92,18 +81,23 @@ const ScenesList: React.FC = () => {
   }
 
   useEffect(() => {
+    // 画面を離れたらリクエストを中断し、アンマウント後の state 更新を防ぐ
+    const controller = new AbortController();
+    const { signal } = controller;
     const fetchAll = async () => {
       try {
         const [scenesRes, progressRes] = await Promise.all([
-          axios.get(`${API_BASE_URL}/api/scenes/`),
-          axios.get(`${API_BASE_URL}/api/progress/my_progress/`).catch(() => ({ data: [] }))
+          axios.get(`${API_BASE_URL}/api/scenes/`, { signal }),
+          axios.get(`${API_BASE_URL}/api/progress/my_progress/`, { signal }).catch(() => ({ data: [] }))
         ]);
-        setScenes(scenesRes.data);
-        const serverProgress: ProgressEntry[] = progressRes.data || [];
+        if (signal.aborted) return;
+        setScenes(Array.isArray(scenesRes.data) ? scenesRes.data : []);
+        const serverProgress: ProgressEntry[] = Array.isArray(progressRes.data) ? progressRes.data : [];
         const localProgress = readLocalProgress();
         setProgress(mergeProgress(serverProgress, localProgress));
         setLoading(false);
-      } catch (err: any) {
+      } catch (err: unknown) {
+        if (signal.aborted || isAbortError(err)) return;
         // サーバが落ちていても、ローカル進捗だけは表示
         setScenes([]);
         setProgress(readLocalProgress());
@@ -112,6 +106,7 @@ const ScenesList: React.FC = () => {
       }
     };
     fetchAll();
+    return () => controller.abort();
   }, []);
 
   const completedLessonIds = new Set(progress.map(p => p.lesson));

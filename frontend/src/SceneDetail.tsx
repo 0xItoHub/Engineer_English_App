@@ -22,11 +22,11 @@ import {
   ArrowBack as ArrowBackIcon,
   School as SchoolIcon
 } from "@mui/icons-material";
+import { getErrorMessage, isAbortError } from "./lib/http";
+import { readLocalProgress } from "./lib/storage";
 
 // APIのベースURL設定
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
-
-const LOCAL_PROGRESS_KEY = "ee_local_progress";
 
 type Scene = {
   id: number;
@@ -75,17 +75,6 @@ const SceneDetail: React.FC = () => {
   const [progress, setProgress] = useState<ProgressEntry[]>([]);
   const [page, setPage] = useState<number>(1);
 
-  function readLocalProgress(): ProgressEntry[] {
-    try {
-      const raw = localStorage.getItem(LOCAL_PROGRESS_KEY);
-      if (!raw) return [];
-      const list = JSON.parse(raw) as ProgressEntry[];
-      return Array.isArray(list) ? list : [];
-    } catch {
-      return [];
-    }
-  }
-
   function mergeProgress(serverList: ProgressEntry[], localList: ProgressEntry[]): ProgressEntry[] {
     const map = new Map<number, ProgressEntry>();
     for (const p of serverList) map.set(p.lesson, { ...p });
@@ -101,26 +90,31 @@ const SceneDetail: React.FC = () => {
   }
 
   useEffect(() => {
-    if (id) {
-      Promise.all([
-        axios.get(`${API_BASE_URL}/api/scenes/${id}/`),
-        axios.get(`${API_BASE_URL}/api/progress/my_progress/`).catch(() => ({ data: [] })),
-      ])
-        .then(([sceneRes, progRes]) => {
-          setScene(sceneRes.data);
-          const serverProgress: ProgressEntry[] = progRes.data || [];
-          const localProgress = readLocalProgress();
-          setProgress(mergeProgress(serverProgress, localProgress));
-          setLoading(false);
-        })
-        .catch((err) => {
-          // サーバからの進捗取得に失敗してもローカルだけで表示
-          setScene(null);
-          setProgress(readLocalProgress());
-          setError("Scene取得エラー: " + err.message);
-          setLoading(false);
-        });
-    }
+    if (!id) return;
+    // 画面遷移時はリクエストを中断し、アンマウント後の state 更新を防ぐ
+    const controller = new AbortController();
+    const { signal } = controller;
+    Promise.all([
+      axios.get(`${API_BASE_URL}/api/scenes/${id}/`, { signal }),
+      axios.get(`${API_BASE_URL}/api/progress/my_progress/`, { signal }).catch(() => ({ data: [] })),
+    ])
+      .then(([sceneRes, progRes]) => {
+        if (signal.aborted) return;
+        setScene(sceneRes.data);
+        const serverProgress: ProgressEntry[] = Array.isArray(progRes.data) ? progRes.data : [];
+        const localProgress = readLocalProgress();
+        setProgress(mergeProgress(serverProgress, localProgress));
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (signal.aborted || isAbortError(err)) return;
+        // サーバからの進捗取得に失敗してもローカルだけで表示
+        setScene(null);
+        setProgress(readLocalProgress());
+        setError("Scene取得エラー: " + getErrorMessage(err));
+        setLoading(false);
+      });
+    return () => controller.abort();
   }, [id]);
 
   // レッスン数が変わった場合、現在ページが範囲外なら1に戻す

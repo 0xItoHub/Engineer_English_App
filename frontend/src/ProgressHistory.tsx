@@ -26,6 +26,7 @@ import {
   TrendingUp as TrendingUpIcon,
   AccessTime as AccessTimeIcon
 } from "@mui/icons-material";
+import { readLocalProgress } from "./lib/storage";
 
 // APIのベースURL設定
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
@@ -40,18 +41,10 @@ type Progress = {
   time_spent: number;
 };
 
-const LOCAL_PROGRESS_KEY = "ee_local_progress";
-
 type SceneLite = { id: number; title: string; lessons?: { id: number; title: string }[] };
 
-const readLocal = (): { lesson: number; score: number; time_spent: number }[] => {
-  try {
-    const raw = localStorage.getItem(LOCAL_PROGRESS_KEY);
-    if (!raw) return [];
-    const list = JSON.parse(raw);
-    return Array.isArray(list) ? list : [];
-  } catch { return []; }
-};
+// ローカル保存分（壊れたデータは除外して読み込む）
+const readLocal = readLocalProgress;
 
 const buildLessonMap = (scenes: SceneLite[]): Map<number, { lesson_title: string; scene_title: string }> => {
   const map = new Map<number, { lesson_title: string; scene_title: string }>();
@@ -69,14 +62,15 @@ const ProgressHistory: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchProgress = useCallback(async () => {
+  const fetchProgress = useCallback(async (signal?: AbortSignal) => {
     try {
       const [progressRes, scenesRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/api/progress/my_progress/`).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE_URL}/api/scenes/`).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE_URL}/api/progress/my_progress/`, { signal }).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE_URL}/api/scenes/`, { signal }).catch(() => ({ data: [] })),
       ]);
-      const server: Progress[] = progressRes.data || [];
-      const scenes: SceneLite[] = scenesRes.data || [];
+      if (signal?.aborted) return;
+      const server: Progress[] = Array.isArray(progressRes.data) ? progressRes.data : [];
+      const scenes: SceneLite[] = Array.isArray(scenesRes.data) ? scenesRes.data : [];
       const lessonMap = buildLessonMap(scenes);
 
       // ローカル分をタイトル補完してProgress形式へ
@@ -97,6 +91,7 @@ const ProgressHistory: React.FC = () => {
       setProgress(merged);
       setLoading(false);
     } catch (err) {
+      if (signal?.aborted) return;
       // サーバダウン時はローカルのみ表示（タイトルはフォールバック）
       const local = readLocal();
       const localAsProgress: Progress[] = local.map((x) => ({
@@ -114,7 +109,10 @@ const ProgressHistory: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    fetchProgress();
+    // 画面を離れたらリクエストを中断し、アンマウント後の state 更新を防ぐ
+    const controller = new AbortController();
+    fetchProgress(controller.signal);
+    return () => controller.abort();
   }, [fetchProgress]);
 
   const formatTime = (seconds: number) => {

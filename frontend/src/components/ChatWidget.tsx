@@ -42,6 +42,13 @@ const ChatWidget: React.FC = () => {
     try {
       const assistant = await client.send([...messages, userMsg]);
       setMessages((m) => [...m, assistant]);
+    } catch (e) {
+      // 応答の取得に失敗した場合もチャット内で案内する
+      console.error("Chat error", e);
+      setMessages((m) => [
+        ...m,
+        { id: Math.random().toString(36).slice(2), role: "assistant", content: "応答を取得できませんでした。しばらくしてから再度お試しください。" },
+      ]);
     } finally {
       setBusy(false);
     }

@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter as Router, Routes, Route, Link as RouterLink } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Link as RouterLink, useLocation } from "react-router-dom";
 import { 
   AppBar, 
   Toolbar, 
@@ -18,12 +18,36 @@ import LessonDetail from "./LessonDetail";
 import ProgressHistory from "./ProgressHistory";
 import SiteFooter from "./components/SiteFooter";
 import ChatWidget from "./components/ChatWidget";
+import ErrorBoundary from "./components/ErrorBoundary";
+import { setupHttpInterceptors } from "./lib/http";
 import axios from "axios";
 
+// API は Cookie を使わないため、クロスオリジンでも資格情報は送信しない
 axios.defaults.withCredentials = false;
 axios.defaults.xsrfCookieName = "csrftoken";
 axios.defaults.xsrfHeaderName = "X-CSRFToken";
 axios.defaults.baseURL = (process.env.REACT_APP_API_BASE as string) || "/";
+// 4xx / 5xx を一元的に処理（ログ出力とユーザー向けメッセージの付与）
+setupHttpInterceptors(axios);
+
+// ルーティング部分（画面遷移時にエラー表示をリセット）
+function AppRoutes() {
+  const location = useLocation();
+  return (
+    <ErrorBoundary resetKey={location.pathname}>
+      <Routes>
+        <Route path="/" element={<ScenesList />} />
+        <Route path="/scene/:id" element={<SceneDetail />} />
+        <Route path="/lesson/:lessonId" element={<LessonDetail />} />
+        <Route path="/progress" element={<ProgressHistory />} />
+        {/* 体裁用のダミーページ（必要に応じて中身を実装） */}
+        <Route path="/terms" element={<div>利用規約（準備中）</div>} />
+        <Route path="/privacy" element={<div>プライバシーポリシー（準備中）</div>} />
+        <Route path="/contact" element={<div>お問い合わせ（準備中）</div>} />
+      </Routes>
+    </ErrorBoundary>
+  );
+}
 
 // カスタムテーマの作成
 const theme = createTheme({
@@ -100,22 +124,15 @@ function App() {
 
           {/* メインコンテンツ */}
           <Container maxWidth="lg" sx={{ mt: 4, mb: 6, flex: 1 }}>
-            <Routes>
-              <Route path="/" element={<ScenesList />} />
-              <Route path="/scene/:id" element={<SceneDetail />} />
-              <Route path="/lesson/:lessonId" element={<LessonDetail />} />
-              <Route path="/progress" element={<ProgressHistory />} />
-              {/* 体裁用のダミーページ（必要に応じて中身を実装） */}
-              <Route path="/terms" element={<div>利用規約（準備中）</div>} />
-              <Route path="/privacy" element={<div>プライバシーポリシー（準備中）</div>} />
-              <Route path="/contact" element={<div>お問い合わせ（準備中）</div>} />
-            </Routes>
+            <AppRoutes />
           </Container>
 
           {/* フッター */}
           <SiteFooter />
           {/* 右下AIチャット（ダミー。後でAPI差し替え） */}
-          <ChatWidget />
+          <ErrorBoundary>
+            <ChatWidget />
+          </ErrorBoundary>
         </Box>
       </Router>
     </ThemeProvider>
