@@ -3,7 +3,24 @@ import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-change-me")
+
+def _load_secret_key():
+    """SECRET_KEY を環境変数、または SSM Parameter Store から読み込む。"""
+    key = os.getenv("DJANGO_SECRET_KEY")
+    if key:
+        return key
+    # 本番（Lambda）では SecureString パラメータ名を受け取り、起動時に取得する
+    param_name = os.getenv("DJANGO_SECRET_KEY_SSM_PARAM")
+    if param_name:
+        import boto3
+
+        ssm = boto3.client("ssm")
+        return ssm.get_parameter(Name=param_name, WithDecryption=True)["Parameter"]["Value"]
+    return "django-insecure-change-me"
+
+
+SECRET_KEY = _load_secret_key()
+
 # 公開リポジトリでは安全側の既定値に（必要に応じて環境変数で上書き）
 DEBUG = os.getenv("DJANGO_DEBUG", "False") == "True"
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
@@ -79,7 +96,7 @@ CHANNEL_LAYERS = {
     }
 }
 
-# CORS/CSRF: デフォルトは締める。必要に応じて環境変数で許可
+# CORS/CSRF: 既定は許可なし。本番はフロントエンドのオリジンのみを環境変数で指定
 if os.getenv("DJANGO_CORS_ALLOW_ALL", "False") == "True":
     CORS_ALLOW_ALL_ORIGINS = True
 else:
@@ -94,12 +111,12 @@ if _csrf_trusted:
 # ローカル開発（DEBUG=True）には影響しない。
 if not DEBUG:
     # SECRET_KEY が未設定（insecureデフォルトのまま）での本番起動を防ぐ。
-    # ※デプロイ前に必ず環境変数 DJANGO_SECRET_KEY を設定すること。
+    # ※デプロイ時は DJANGO_SECRET_KEY または DJANGO_SECRET_KEY_SSM_PARAM を設定すること。
     if SECRET_KEY == "django-insecure-change-me":
         from django.core.exceptions import ImproperlyConfigured
 
         raise ImproperlyConfigured(
-            "本番(DEBUG=False)では環境変数 DJANGO_SECRET_KEY の設定が必須です。"
+            "本番(DEBUG=False)では DJANGO_SECRET_KEY または DJANGO_SECRET_KEY_SSM_PARAM の設定が必須です。"
         )
 
     # HTTPS終端（API Gateway / CloudFront）の背後にいるため、転送ヘッダで判定。
