@@ -1,46 +1,84 @@
-# Getting Started with Create React App
+# Engineer English App — フロントエンド
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+エンジニアの実務シーンに沿って英語を学ぶ Web アプリのフロントエンドです。
+プロジェクト全体の構成・バックエンド・デプロイ手順は [ルートの README](../README.md) を参照してください。
 
-## Available Scripts
+## 技術スタック
 
-In the project directory, you can run:
+- React 19 / TypeScript 4.9（Create React App 5 / react-scripts 5.0.1）
+- MUI 7（`@mui/material` / `@mui/icons-material`）
+- React Router 7
+- axios
+- Jest + React Testing Library
 
-### `npm start`
+> TypeScript は react-scripts 5 の対応範囲に合わせて 4.9 系を使用しています。
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+## セットアップ
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+Node.js 20 以上が必要です（React Router 7 の要件）。
 
-### `npm test`
+```bash
+cd frontend
+npm ci
+npm start   # http://localhost:3000
+```
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+バックエンド（Django）をローカルで `http://localhost:8000` に起動しておくと、API と接続して動作を確認できます。
+API に接続できない場合でも画面は表示され、学習進捗はブラウザの localStorage に保存されます。
 
-### `npm run build`
+## 環境変数
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+CRA の仕様により、`REACT_APP_` で始まる変数がビルド時に埋め込まれます（秘密情報は設定しないでください）。
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+| 変数 | 内容 | 既定値 |
+|---|---|---|
+| `REACT_APP_API_BASE_URL` | 各画面が呼び出す API のベース URL（例: API Gateway の URL） | `http://localhost:8000` |
+| `REACT_APP_API_BASE` | axios の `baseURL`（相対パスでの呼び出し用） | `/` |
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+ローカルで値を変える場合は `frontend/.env.local` に記述します（Git 管理対象外）。
 
-### `npm run eject`
+```bash
+REACT_APP_API_BASE_URL=http://localhost:8000
+```
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+## npm スクリプト
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+| コマンド | 内容 |
+|---|---|
+| `npm start` | 開発サーバーを起動 |
+| `npm test` | テストをウォッチモードで実行 |
+| `npm run test:ci` | テストを 1 回だけ実行（CI 向け。`CI=true npm run test:ci`） |
+| `npm run lint` | ESLint を実行（警告 0 件を必須） |
+| `npm run build` | 本番用ビルドを `build/` に出力 |
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+コード整形のルールは `.prettierrc` にまとめています（エディタの Prettier 連携で利用できます）。
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+## ディレクトリ構成
 
-## Learn More
+```
+src/
+├─ App.tsx                 # ルーティング・テーマ・共通レイアウト
+├─ ScenesList.tsx          # シーン一覧（トップ）
+├─ SceneDetail.tsx         # シーン詳細（レッスン一覧）
+├─ LessonDetail.tsx        # レッスン（フレーズ・対話・読み上げ）
+├─ ProgressHistory.tsx     # 学習履歴
+├─ components/             # 背景アニメーション・チャット・フッター・ErrorBoundary
+├─ hooks/                  # チャットクライアント・prefers-reduced-motion
+└─ lib/                    # HTTP エラー処理・localStorage ヘルパー
+```
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+## エラーハンドリングとアクセシビリティ
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+- 描画中のエラーは ErrorBoundary が受け止め、再試行・再読み込みできるフォールバックを表示します。
+- API の 4xx / 5xx は axios のインターセプターで一元的に処理し、画面にはユーザー向けのメッセージを表示します。
+- OS の「視差効果を減らす」設定（`prefers-reduced-motion`）に合わせて背景アニメーションを停止します。
+- 音声読み上げ（Web Speech API）に対応していないブラウザでは、読み上げボタンを無効化して案内を表示します。
+
+## ビルドとデプロイ
+
+```bash
+REACT_APP_API_BASE_URL=<API のベース URL> npm run build
+```
+
+`build/` の内容を S3 にアップロードし、CloudFront から配信します。
+インフラ構成とデプロイ手順の詳細は [ルートの README](../README.md) を参照してください。
