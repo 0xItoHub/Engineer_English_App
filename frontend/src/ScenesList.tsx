@@ -24,9 +24,7 @@ import {
 import AnimatedCodeBackground from "./components/AnimatedCodeBackground";
 import { isAbortError } from "./lib/http";
 import { readLocalProgress } from "./lib/storage";
-
-// APIのベースURL設定
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
+import { API_BASE_URL } from "./lib/config";
 
 // カルーセル用画像（public/images/ 配下に配置してください）
 const heroImages = [

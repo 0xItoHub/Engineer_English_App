@@ -27,9 +27,7 @@ import {
   AccessTime as AccessTimeIcon
 } from "@mui/icons-material";
 import { readLocalProgress } from "./lib/storage";
-
-// APIのベースURL設定
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
+import { API_BASE_URL } from "./lib/config";
 
 type Progress = {
   id?: number; // サーバのみ
