@@ -32,3 +32,30 @@ variable "ecr_repository_name" {
   default     = "ee-backend"
   description = "バックエンドのコンテナイメージを格納する ECR リポジトリ名（このTF構成の管理外）"
 }
+
+# ------------------------------------------------------------
+# 監視（CloudWatch アラーム / ログ保持期間）
+# ------------------------------------------------------------
+variable "enable_monitoring" {
+  type        = bool
+  default     = false
+  description = "true にすると Lambda / API Gateway の CloudWatch アラームと通知用 SNS トピックを作成する"
+}
+
+variable "alarm_email" {
+  type        = string
+  default     = ""
+  description = "アラーム通知先のメールアドレス。空文字ならメール購読を作成しない"
+}
+
+variable "manage_lambda_log_group" {
+  type        = bool
+  default     = false
+  description = "true にすると Lambda のロググループを Terraform で管理する（既存の場合は事前に terraform import が必要）"
+}
+
+variable "log_retention_days" {
+  type        = number
+  default     = 30
+  description = "Lambda ロググループの保持日数（manage_lambda_log_group=true のとき有効）"
+}
