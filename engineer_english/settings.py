@@ -143,4 +143,40 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticatedOrReadOnly",
     ],
+    # API のレート制限（環境変数で上書き可能）。
+    # カウンタは既定の LocMem キャッシュに保持するため、Lambda ではインスタンス単位の制限となる。
+    # 全体の上限は API Gateway 側のスロットリングで担保する。
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": os.getenv("DJANGO_THROTTLE_ANON", "120/min"),
+        "user": os.getenv("DJANGO_THROTTLE_USER", "600/min"),
+        # 学習完了の記録（POST /api/progress/complete_lesson/）は個別に厳しめの上限を設定
+        "complete_lesson": os.getenv("DJANGO_THROTTLE_COMPLETE_LESSON", "30/min"),
+    },
+}
+
+# ログ設定: エラーや警告をコンソール（Lambda では CloudWatch Logs）へ出力する
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "simple": {"format": "%(asctime)s %(levelname)s %(name)s: %(message)s"},
+    },
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "formatter": "simple"},
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": os.getenv("DJANGO_LOG_LEVEL", "WARNING"),
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": os.getenv("DJANGO_LOG_LEVEL", "WARNING"),
+            "propagate": False,
+        },
+    },
 }
