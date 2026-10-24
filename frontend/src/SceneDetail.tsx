@@ -9,10 +9,8 @@ import {
   Alert,
   Box,
   Chip,
-  CardActions,
   Button,
   Paper,
-  LinearProgress,
   Pagination,
   List,
   ListItem,
@@ -21,17 +19,14 @@ import {
 } from "@mui/material";
 import { 
   PlayArrow as PlayIcon,
-  Book as BookIcon,
-  Chat as ChatIcon,
-  TrendingUp as TrendingUpIcon,
   ArrowBack as ArrowBackIcon,
   School as SchoolIcon
 } from "@mui/icons-material";
+import { getErrorMessage, isAbortError } from "./lib/http";
+import { readLocalProgress } from "./lib/storage";
 
 // APIのベースURL設定
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
-
-const LOCAL_PROGRESS_KEY = "ee_local_progress";
 
 type Scene = {
   id: number;
@@ -80,17 +75,6 @@ const SceneDetail: React.FC = () => {
   const [progress, setProgress] = useState<ProgressEntry[]>([]);
   const [page, setPage] = useState<number>(1);
 
-  function readLocalProgress(): ProgressEntry[] {
-    try {
-      const raw = localStorage.getItem(LOCAL_PROGRESS_KEY);
-      if (!raw) return [];
-      const list = JSON.parse(raw) as ProgressEntry[];
-      return Array.isArray(list) ? list : [];
-    } catch {
-      return [];
-    }
-  }
-
   function mergeProgress(serverList: ProgressEntry[], localList: ProgressEntry[]): ProgressEntry[] {
     const map = new Map<number, ProgressEntry>();
     for (const p of serverList) map.set(p.lesson, { ...p });
@@ -106,26 +90,31 @@ const SceneDetail: React.FC = () => {
   }
 
   useEffect(() => {
-    if (id) {
-      Promise.all([
-        axios.get(`${API_BASE_URL}/api/scenes/${id}/`),
-        axios.get(`${API_BASE_URL}/api/progress/my_progress/`).catch(() => ({ data: [] })),
-      ])
-        .then(([sceneRes, progRes]) => {
-          setScene(sceneRes.data);
-          const serverProgress: ProgressEntry[] = progRes.data || [];
-          const localProgress = readLocalProgress();
-          setProgress(mergeProgress(serverProgress, localProgress));
-          setLoading(false);
-        })
-        .catch((err) => {
-          // サーバからの進捗取得に失敗してもローカルだけで表示
-          setScene(null);
-          setProgress(readLocalProgress());
-          setError("Scene取得エラー: " + err.message);
-          setLoading(false);
-        });
-    }
+    if (!id) return;
+    // 画面遷移時はリクエストを中断し、アンマウント後の state 更新を防ぐ
+    const controller = new AbortController();
+    const { signal } = controller;
+    Promise.all([
+      axios.get(`${API_BASE_URL}/api/scenes/${id}/`, { signal }),
+      axios.get(`${API_BASE_URL}/api/progress/my_progress/`, { signal }).catch(() => ({ data: [] })),
+    ])
+      .then(([sceneRes, progRes]) => {
+        if (signal.aborted) return;
+        setScene(sceneRes.data);
+        const serverProgress: ProgressEntry[] = Array.isArray(progRes.data) ? progRes.data : [];
+        const localProgress = readLocalProgress();
+        setProgress(mergeProgress(serverProgress, localProgress));
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (signal.aborted || isAbortError(err)) return;
+        // サーバからの進捗取得に失敗してもローカルだけで表示
+        setScene(null);
+        setProgress(readLocalProgress());
+        setError("Scene取得エラー: " + getErrorMessage(err));
+        setLoading(false);
+      });
+    return () => controller.abort();
   }, [id]);
 
   // レッスン数が変わった場合、現在ページが範囲外なら1に戻す
@@ -149,7 +138,7 @@ const SceneDetail: React.FC = () => {
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress size={60} />
+        <CircularProgress size={60} aria-label="読み込み中" />
       </Box>
     );
   }
@@ -183,7 +172,7 @@ const SceneDetail: React.FC = () => {
         </Button>
         <Paper elevation={0} sx={{ p: 3, backgroundColor: "#f5f5f5" }}>
           <Typography variant="h4" component="h1" gutterBottom>
-            📚 {scene.title}
+            <span aria-hidden="true">📚</span> {scene.title}
           </Typography>
         </Paper>
       </Box>
@@ -201,7 +190,7 @@ const SceneDetail: React.FC = () => {
             
             {lessons.length > 0 ? (
               <>
-                <List>
+                <List aria-label="レッスン一覧">
                   {paginated.map((lesson) => {
                     const score = getLessonScore(lesson.id);
                     return (
@@ -211,12 +200,15 @@ const SceneDetail: React.FC = () => {
                           size="small"
                           startIcon={<PlayIcon />}
                           onClick={() => handleStartLesson(lesson.id)}
+                          aria-label={`${lesson.title} を開始`}
                         >
                           開始
                         </Button>
                       }>
                         <ListItemText
                           primary={lesson.title}
+                          // secondary にブロック要素を含むため div として描画する
+                          slotProps={{ secondary: { component: 'div' } }}
                           secondary={
                             <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 2 }}>
                               <Box sx={{ position: 'relative', display: 'inline-flex' }}>
@@ -226,6 +218,7 @@ const SceneDetail: React.FC = () => {
                                   value={100}
                                   size={42}
                                   thickness={4}
+                                  aria-hidden="true"
                                   sx={{
                                     color: (theme) => theme.palette.divider,
                                     position: 'absolute',
@@ -233,7 +226,13 @@ const SceneDetail: React.FC = () => {
                                     top: 0,
                                   }}
                                 />
-                                <CircularProgress variant="determinate" value={score} size={42} thickness={4} />
+                                <CircularProgress
+                                  variant="determinate"
+                                  value={score}
+                                  size={42}
+                                  thickness={4}
+                                  aria-label={`${lesson.title} のスコア`}
+                                />
                                 <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                   <Typography variant="caption" color="text.secondary">{`${score}%`}</Typography>
                                 </Box>
