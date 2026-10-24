@@ -1,6 +1,8 @@
 import React, { useEffect, useRef } from "react";
 
+// 背景に表示するコード片（`${...}` は表示用の文字列としてそのまま描画する）
 const CODE_LINES = [
+  // eslint-disable-next-line no-template-curly-in-string
   "function hello(name) { return `Hello, ${name}`; }",
   "const sum = (a, b) => a + b;",
   "for (let i = 0; i < 10; i++) console.log(i);",

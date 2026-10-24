@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import {
@@ -18,8 +18,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  LinearProgress,
-  Grid
+  LinearProgress
 } from "@mui/material";
 import { 
   ArrowBack as ArrowBackIcon,
@@ -45,36 +44,32 @@ const LOCAL_PROGRESS_KEY = "ee_local_progress";
 
 type SceneLite = { id: number; title: string; lessons?: { id: number; title: string }[] };
 
+const readLocal = (): { lesson: number; score: number; time_spent: number }[] => {
+  try {
+    const raw = localStorage.getItem(LOCAL_PROGRESS_KEY);
+    if (!raw) return [];
+    const list = JSON.parse(raw);
+    return Array.isArray(list) ? list : [];
+  } catch { return []; }
+};
+
+const buildLessonMap = (scenes: SceneLite[]): Map<number, { lesson_title: string; scene_title: string }> => {
+  const map = new Map<number, { lesson_title: string; scene_title: string }>();
+  for (const s of scenes || []) {
+    for (const l of s.lessons || []) {
+      map.set(l.id, { lesson_title: l.title, scene_title: s.title });
+    }
+  }
+  return map;
+};
+
 const ProgressHistory: React.FC = () => {
   const navigate = useNavigate();
   const [progress, setProgress] = useState<Progress[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchProgress();
-  }, []);
-
-  const readLocal = (): { lesson: number; score: number; time_spent: number }[] => {
-    try {
-      const raw = localStorage.getItem(LOCAL_PROGRESS_KEY);
-      if (!raw) return [];
-      const list = JSON.parse(raw);
-      return Array.isArray(list) ? list : [];
-    } catch { return []; }
-  };
-
-  const buildLessonMap = (scenes: SceneLite[]): Map<number, { lesson_title: string; scene_title: string }> => {
-    const map = new Map<number, { lesson_title: string; scene_title: string }>();
-    for (const s of scenes || []) {
-      for (const l of s.lessons || []) {
-        map.set(l.id, { lesson_title: l.title, scene_title: s.title });
-      }
-    }
-    return map;
-  };
-
-  const fetchProgress = async () => {
+  const fetchProgress = useCallback(async () => {
     try {
       const [progressRes, scenesRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/progress/my_progress/`).catch(() => ({ data: [] })),
@@ -116,7 +111,11 @@ const ProgressHistory: React.FC = () => {
       setError(null);
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchProgress();
+  }, [fetchProgress]);
 
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);

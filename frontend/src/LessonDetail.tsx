@@ -88,7 +88,6 @@ const LessonDetail: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
-  const [isCompleted, setIsCompleted] = useState(false);
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [saving, setSaving] = useState(false);
   const [snackOpen, setSnackOpen] = useState(false);
@@ -246,7 +245,6 @@ const LessonDetail: React.FC = () => {
         // 未ログインなどで保存されなかった場合はlocalStorageへ
         pushLocalProgress({ lesson: Number(lessonId), score, time_spent: timeSpent });
       }
-      setIsCompleted(true);
       setSnackOpen(true);
       setTimeout(() => navigate('/progress'), 1200);
     } catch (err) {

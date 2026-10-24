@@ -9,10 +9,8 @@ import {
   Alert,
   Box,
   Chip,
-  CardActions,
   Button,
   Paper,
-  LinearProgress,
   Pagination,
   List,
   ListItem,
@@ -21,9 +19,6 @@ import {
 } from "@mui/material";
 import { 
   PlayArrow as PlayIcon,
-  Book as BookIcon,
-  Chat as ChatIcon,
-  TrendingUp as TrendingUpIcon,
   ArrowBack as ArrowBackIcon,
   School as SchoolIcon
 } from "@mui/icons-material";

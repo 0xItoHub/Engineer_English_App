@@ -68,24 +68,7 @@ function App() {
 
   React.useEffect(() => { fetchWhoAmI(); }, [fetchWhoAmI]);
 
-  const demoLogin = async () => { /* no-op */ };
-
   const doLogout = async () => { /* no-op */ };
-
-  async function syncLocalProgressToServer() {
-    const key = "ee_local_progress";
-    const raw = localStorage.getItem(key);
-    if (!raw) return;
-    try {
-      const list: { lesson: number; score: number; time_spent: number }[] = JSON.parse(raw);
-      for (const item of list) {
-        await axios.post("/api/progress/complete_lesson/", {
-          lesson_id: item.lesson, score: item.score, time_spent: item.time_spent
-        });
-      }
-      localStorage.removeItem(key);
-    } catch {}
-  }
 
   return (
     <ThemeProvider theme={theme}>
