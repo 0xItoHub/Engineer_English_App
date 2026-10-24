@@ -22,8 +22,20 @@ variable "django_debug" {
 }
 
 variable "allowed_hosts" {
-  type    = string
-  default = "*"
+  type        = string
+  default     = ""
+  description = "カンマ区切り。空なら API Gateway のホスト名を使用"
+}
+
+variable "cors_allowed_origins" {
+  type        = string
+  default     = ""
+  description = "カンマ区切り。空なら CloudFront（フロントエンド）のオリジンを使用"
+}
+
+variable "secret_key_ssm_param_name" {
+  type        = string
+  description = "Django SECRET_KEY を保存した SSM SecureString パラメータ名"
 }
 
 # 重要: SQLite実体の保存先（Lambdaの書込可能領域）

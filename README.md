@@ -66,10 +66,28 @@ terraform apply
 
 > SQLite は Lambda の `/tmp/db.sqlite3` を使用（コールドスタートで消える可能性あり）。永続化が必要になったら RDS に切替を推奨。
 ```
+### デプロイ時に設定する値
+Lambda の環境変数は Terraform（`infra/lambda_api.tf`）で管理します。`infra/terraform.tfvars` で指定する主な値:
+
+| 変数 | 内容 |
+|---|---|
+| `secret_key_ssm_param_name` | Django `SECRET_KEY` を保存した SSM パラメータ名（必須） |
+| `django_debug` | 本番は `"False"`（既定値） |
+| `allowed_hosts` | 空なら API Gateway のホスト名を使用 |
+| `cors_allowed_origins` | 空なら CloudFront（フロントエンド）のオリジンを使用 |
+
+`SECRET_KEY` の値はコードや Terraform には書かず、SSM Parameter Store の SecureString として登録します。
+```bash
+aws ssm put-parameter --name "/<project>/django-secret-key" --type SecureString \
+  --value "$(python -c 'import secrets;print(secrets.token_urlsafe(50))')"
+```
+
 ---
 
 ## セキュリティ
 - API Gateway は AWS Shield Standard により自動で DDoS 保護（無料）
+- 本番環境では HTTPS 前提の Cookie・HSTS を有効化し、CORS はフロントエンドのオリジンのみ許可
+- API は読み取りを公開、書き込みは認証ユーザーのみ（学習完了の記録を除く）
 
 ---
 

@@ -1,0 +1,14 @@
+# コンテナイメージに不要なファイルを除外
+.git
+.gitignore
+.dockerignore
+**/__pycache__
+*.pyc
+venv/
+.venv/
+db.sqlite3
+seed_db.sqlite3
+frontend/
+infra/
+*.md
+.DS_Store

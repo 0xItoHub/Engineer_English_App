@@ -3,7 +3,24 @@ import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-change-me")
+
+def _load_secret_key():
+    """SECRET_KEY を環境変数、または SSM Parameter Store から読み込む。"""
+    key = os.getenv("DJANGO_SECRET_KEY")
+    if key:
+        return key
+    # 本番（Lambda）では SecureString パラメータ名を受け取り、起動時に取得する
+    param_name = os.getenv("DJANGO_SECRET_KEY_SSM_PARAM")
+    if param_name:
+        import boto3
+
+        ssm = boto3.client("ssm")
+        return ssm.get_parameter(Name=param_name, WithDecryption=True)["Parameter"]["Value"]
+    return "django-insecure-change-me"
+
+
+SECRET_KEY = _load_secret_key()
+
 # 公開リポジトリでは安全側の既定値に（必要に応じて環境変数で上書き）
 DEBUG = os.getenv("DJANGO_DEBUG", "False") == "True"
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
@@ -79,7 +96,7 @@ CHANNEL_LAYERS = {
     }
 }
 
-# CORS/CSRF: デフォルトは締める。必要に応じて環境変数で許可
+# CORS/CSRF: 既定は許可なし。本番はフロントエンドのオリジンのみを環境変数で指定
 if os.getenv("DJANGO_CORS_ALLOW_ALL", "False") == "True":
     CORS_ALLOW_ALL_ORIGINS = True
 else:
@@ -90,13 +107,39 @@ _csrf_trusted = os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").strip()
 if _csrf_trusted:
     CSRF_TRUSTED_ORIGINS = [o for o in _csrf_trusted.split(",") if o]
 
+# 本番（DEBUG=False）でのみ有効化するセキュリティ設定。
+# ローカル開発（DEBUG=True）には影響しない。
+if not DEBUG:
+    # SECRET_KEY が未設定（insecureデフォルトのまま）での本番起動を防ぐ。
+    # ※デプロイ時は DJANGO_SECRET_KEY または DJANGO_SECRET_KEY_SSM_PARAM を設定すること。
+    if SECRET_KEY == "django-insecure-change-me":
+        from django.core.exceptions import ImproperlyConfigured
+
+        raise ImproperlyConfigured(
+            "本番(DEBUG=False)では DJANGO_SECRET_KEY または DJANGO_SECRET_KEY_SSM_PARAM の設定が必須です。"
+        )
+
+    # HTTPS終端（API Gateway / CloudFront）の背後にいるため、転送ヘッダで判定。
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    # SSLリダイレクトはリダイレクトループ回避のため既定オフ（必要なら env で有効化）。
+    SECURE_SSL_REDIRECT = os.getenv("DJANGO_SECURE_SSL_REDIRECT", "False") == "True"
+    SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_SECURE_HSTS_SECONDS", "31536000"))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    X_FRAME_OPTIONS = "DENY"
+
 # Django REST Framework設定
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.SessionAuthentication",
         "rest_framework.authentication.BasicAuthentication",
     ],
+    # 既定は「読み取りは誰でも / 書き込みは認証ユーザーのみ」。
+    # 未認証での書込・削除を防ぐ。GET主体のUIには影響しない。
     "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.AllowAny",
+        "rest_framework.permissions.IsAuthenticatedOrReadOnly",
     ],
 }
