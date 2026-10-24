@@ -6,7 +6,7 @@ Engineer English App をローカルで開発・テストするための手順�
 
 | ツール | バージョン |
 |---|---|
-| Python | 3.12 |
+| Python | 3.14 |
 | Node.js | 22 LTS |
 | Terraform | 1.10 以上（CI は 1.15 系） |
 | Docker | インフラ用イメージをビルドする場合のみ |
@@ -15,7 +15,7 @@ Engineer English App をローカルで開発・テストするための手順�
 
 ```bash
 # 仮想環境を作成して有効化
-python3.12 -m venv venv
+python3.14 -m venv venv
 source venv/bin/activate
 
 # 開発用の依存（requirements.txt + テスト・lint ツール）をインストール
