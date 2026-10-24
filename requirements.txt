@@ -1,5 +1,5 @@
 # 依存バージョンを固定（更新は Dependabot 等で管理）
-Django==5.2.18
+Django==6.1.2
 djangorestframework==3.18.3
 channels==4.3.2
 django-cors-headers==4.9.0
