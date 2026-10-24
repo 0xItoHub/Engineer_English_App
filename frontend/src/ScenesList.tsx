@@ -1,12 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
 import {
   Card,
   CardContent,
   Typography,
   CircularProgress,
-  Alert,
   Box,
   Chip,
   CardActions,
@@ -22,9 +20,8 @@ import {
   TrendingUp as TrendingUpIcon
 } from "@mui/icons-material";
 import AnimatedCodeBackground from "./components/AnimatedCodeBackground";
-import { isAbortError } from "./lib/http";
 import { readLocalProgress } from "./lib/storage";
-import { API_BASE_URL } from "./lib/config";
+import { mergeProgress, useMyProgressQuery, useScenesQuery, type Scene } from "./lib/queries";
 
 // カルーセル用画像（public/images/ 配下に配置してください）
 const heroImages = [
@@ -39,73 +36,15 @@ const slide = keyframes`
   100% { transform: translateX(-50%); }
 `;
 
-type LessonLite = { id: number; title: string };
-
-type Scene = {
-  id: number;
-  title: string;
-  phrases?: unknown[];
-  dialogues?: unknown[];
-  lessons?: LessonLite[];
-};
-
-type ProgressEntry = {
-  id?: number; // サーバ進捗のみ
-  lesson: number;
-  score: number;
-  time_spent: number;
-};
-
 const ScenesList: React.FC = () => {
   const navigate = useNavigate();
-  const [scenes, setScenes] = useState<Scene[]>([]);
-  const [progress, setProgress] = useState<ProgressEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const scenesQuery = useScenesQuery();
+  const progressQuery = useMyProgressQuery();
 
-  function mergeProgress(serverList: ProgressEntry[], localList: ProgressEntry[]): ProgressEntry[] {
-    const map = new Map<number, ProgressEntry>();
-    for (const p of serverList) map.set(p.lesson, { ...p });
-    for (const p of localList) {
-      const cur = map.get(p.lesson);
-      if (!cur) {
-        map.set(p.lesson, { ...p });
-      } else {
-        // スコアは高い方、時間は最新で上書き
-        map.set(p.lesson, { ...cur, score: Math.max(cur.score, p.score), time_spent: p.time_spent });
-      }
-    }
-    return Array.from(map.values());
-  }
-
-  useEffect(() => {
-    // 画面を離れたらリクエストを中断し、アンマウント後の state 更新を防ぐ
-    const controller = new AbortController();
-    const { signal } = controller;
-    const fetchAll = async () => {
-      try {
-        const [scenesRes, progressRes] = await Promise.all([
-          axios.get(`${API_BASE_URL}/api/scenes/`, { signal }),
-          axios.get(`${API_BASE_URL}/api/progress/my_progress/`, { signal }).catch(() => ({ data: [] }))
-        ]);
-        if (signal.aborted) return;
-        setScenes(Array.isArray(scenesRes.data) ? scenesRes.data : []);
-        const serverProgress: ProgressEntry[] = Array.isArray(progressRes.data) ? progressRes.data : [];
-        const localProgress = readLocalProgress();
-        setProgress(mergeProgress(serverProgress, localProgress));
-        setLoading(false);
-      } catch (err: unknown) {
-        if (signal.aborted || isAbortError(err)) return;
-        // サーバが落ちていても、ローカル進捗だけは表示
-        setScenes([]);
-        setProgress(readLocalProgress());
-        setError(null);
-        setLoading(false);
-      }
-    };
-    fetchAll();
-    return () => controller.abort();
-  }, []);
+  // サーバが落ちていても、ローカル進捗だけは表示する
+  const scenes: Scene[] = scenesQuery.data ?? [];
+  const progress = mergeProgress(progressQuery.data ?? [], readLocalProgress());
+  const loading = scenesQuery.isPending || progressQuery.isPending;
 
   const completedLessonIds = new Set(progress.map(p => p.lesson));
 
@@ -125,14 +64,6 @@ const ScenesList: React.FC = () => {
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
         <CircularProgress size={60} aria-label="読み込み中" />
       </Box>
-    );
-  }
-
-  if (error) {
-    return (
-      <Alert severity="error" sx={{ mt: 2 }}>
-        {error}
-      </Alert>
     );
   }
 

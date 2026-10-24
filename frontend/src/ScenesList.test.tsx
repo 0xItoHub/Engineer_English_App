@@ -1,9 +1,10 @@
 import { vi, type Mocked } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import axios from 'axios';
 import ScenesList from './ScenesList';
 import { LOCAL_PROGRESS_KEY } from './lib/storage';
+import { renderWithClient } from './test/renderWithClient';
 
 vi.mock('axios');
 const mockedAxios = axios as Mocked<typeof axios>;
@@ -14,7 +15,7 @@ const scenes = [
 ];
 
 function renderScenesList() {
-  return render(
+  return renderWithClient(
     <MemoryRouter initialEntries={['/']}>
       <Routes>
         <Route path="/" element={<ScenesList />} />

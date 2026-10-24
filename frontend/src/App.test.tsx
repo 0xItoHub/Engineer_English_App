@@ -1,7 +1,8 @@
 import { vi, type Mocked } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import axios from 'axios';
 import App from './App';
+import { renderWithClient } from './test/renderWithClient';
 
 vi.mock('axios');
 const mockedAxios = axios as Mocked<typeof axios>;
@@ -20,7 +21,7 @@ afterEach(() => {
 });
 
 test('ヘッダー・メイン・フッターを表示し、トップにシーン一覧を表示する', async () => {
-  render(<App />);
+  renderWithClient(<App />);
 
   expect(screen.getByRole('link', { name: /Engineer English App ホームへ/ })).toBeInTheDocument();
   expect(screen.getByRole('main')).toBeInTheDocument();

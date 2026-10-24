@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import axios from "axios";
 import {
   Card,
   CardContent,
@@ -22,98 +21,25 @@ import {
   ArrowBack as ArrowBackIcon,
   School as SchoolIcon
 } from "@mui/icons-material";
-import { getErrorMessage, isAbortError } from "./lib/http";
+import { getErrorMessage } from "./lib/http";
 import { readLocalProgress } from "./lib/storage";
-import { API_BASE_URL } from "./lib/config";
-
-type Scene = {
-  id: number;
-  title: string;
-  phrases?: Phrase[];
-  dialogues?: Dialogue[];
-  lessons?: Lesson[];
-};
-
-type Phrase = {
-  id: number;
-  text_en: string;
-  text_ja: string;
-  note: string;
-};
-
-type Dialogue = {
-  id: number;
-  speaker: string;
-  line_en: string;
-  line_ja: string;
-  order: number;
-};
-
-type Lesson = {
-  id: number;
-  title: string;
-  description: string;
-};
-
-type ProgressEntry = {
-  id?: number; // サーバのみ
-  lesson: number;
-  score: number; // 0-100
-  time_spent: number;
-};
+import { mergeProgress, useMyProgressQuery, useSceneQuery } from "./lib/queries";
 
 const PAGE_SIZE = 5;
 
 const SceneDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [scene, setScene] = useState<Scene | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [progress, setProgress] = useState<ProgressEntry[]>([]);
+  const sceneQuery = useSceneQuery(id ? Number(id) : undefined);
+  const progressQuery = useMyProgressQuery();
   const [page, setPage] = useState<number>(1);
 
-  function mergeProgress(serverList: ProgressEntry[], localList: ProgressEntry[]): ProgressEntry[] {
-    const map = new Map<number, ProgressEntry>();
-    for (const p of serverList) map.set(p.lesson, { ...p });
-    for (const p of localList) {
-      const cur = map.get(p.lesson);
-      if (!cur) {
-        map.set(p.lesson, { ...p });
-      } else {
-        map.set(p.lesson, { ...cur, score: Math.max(cur.score, p.score), time_spent: p.time_spent });
-      }
-    }
-    return Array.from(map.values());
-  }
-
-  useEffect(() => {
-    if (!id) return;
-    // 画面遷移時はリクエストを中断し、アンマウント後の state 更新を防ぐ
-    const controller = new AbortController();
-    const { signal } = controller;
-    Promise.all([
-      axios.get(`${API_BASE_URL}/api/scenes/${id}/`, { signal }),
-      axios.get(`${API_BASE_URL}/api/progress/my_progress/`, { signal }).catch(() => ({ data: [] })),
-    ])
-      .then(([sceneRes, progRes]) => {
-        if (signal.aborted) return;
-        setScene(sceneRes.data);
-        const serverProgress: ProgressEntry[] = Array.isArray(progRes.data) ? progRes.data : [];
-        const localProgress = readLocalProgress();
-        setProgress(mergeProgress(serverProgress, localProgress));
-        setLoading(false);
-      })
-      .catch((err) => {
-        if (signal.aborted || isAbortError(err)) return;
-        // サーバからの進捗取得に失敗してもローカルだけで表示
-        setScene(null);
-        setProgress(readLocalProgress());
-        setError("Scene取得エラー: " + getErrorMessage(err));
-        setLoading(false);
-      });
-    return () => controller.abort();
-  }, [id]);
+  const scene = sceneQuery.data ?? null;
+  // サーバからの進捗取得に失敗してもローカルだけで表示
+  const progress = mergeProgress(progressQuery.data ?? [], readLocalProgress());
+  const loading = sceneQuery.isPending || progressQuery.isPending;
+  // 表示できるデータが無いときだけエラーを表示する（キャッシュがあれば再取得の失敗時もそのまま表示）
+  const error = sceneQuery.isError && !scene ? "Scene取得エラー: " + getErrorMessage(sceneQuery.error) : null;
 
   // レッスン数が変わった場合、現在ページが範囲外なら1に戻す
   useEffect(() => {

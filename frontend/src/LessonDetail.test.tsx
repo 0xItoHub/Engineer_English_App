@@ -1,9 +1,10 @@
 import { vi, type Mocked } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import axios from 'axios';
 import LessonDetail from './LessonDetail';
 import { LOCAL_PROGRESS_KEY } from './lib/storage';
+import { renderWithClient } from './test/renderWithClient';
 
 vi.mock('axios');
 const mockedAxios = axios as Mocked<typeof axios>;
@@ -26,7 +27,7 @@ function mockLessonApi() {
 }
 
 function renderLessonDetail() {
-  return render(
+  return renderWithClient(
     <MemoryRouter initialEntries={['/lesson/5']}>
       <Routes>
         <Route path="/lesson/:lessonId" element={<LessonDetail />} />

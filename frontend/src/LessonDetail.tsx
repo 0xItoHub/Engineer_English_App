@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import axios from "axios";
 import {
   Card,
   CardContent,
@@ -30,38 +29,15 @@ import {
   VolumeUp as VolumeUpIcon,
   StopCircle as StopCircleIcon
 } from "@mui/icons-material";
-import { getErrorMessage, isAbortError } from "./lib/http";
+import { getErrorMessage } from "./lib/http";
 import { pushLocalProgress } from "./lib/storage";
-import { API_BASE_URL } from "./lib/config";
-
-type Lesson = {
-  id: number;
-  title: string;
-  description: string;
-  scene: number;
-  lesson_phrases?: Phrase[];
-  lesson_dialogues?: Dialogue[];
-};
-
-type Scene = {
-  id: number;
-  title: string;
-};
-
-type Phrase = {
-  id: number;
-  text_en: string;
-  text_ja: string;
-  note: string;
-};
-
-type Dialogue = {
-  id: number;
-  speaker: string;
-  line_en: string;
-  line_ja: string;
-  order: number;
-};
+import {
+  useCompleteLessonMutation,
+  useLessonQuery,
+  useSceneQuery,
+  type Dialogue,
+  type Phrase,
+} from "./lib/queries";
 
 // 読み上げ速度の選択肢
 const SPEECH_RATES = [0.75, 1, 1.25, 1.5];
@@ -80,14 +56,13 @@ function isSpeechSynthesisSupported(): boolean {
 const LessonDetail: React.FC = () => {
   const { lessonId } = useParams<{ lessonId: string }>();
   const navigate = useNavigate();
-  const [lesson, setLesson] = useState<Lesson | null>(null);
-  const [scene, setScene] = useState<Scene | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const lessonQuery = useLessonQuery(lessonId ? Number(lessonId) : undefined);
+  // レッスン取得後に、所属するシーン（戻り先）を取得する
+  const sceneQuery = useSceneQuery(lessonQuery.data?.scene);
+  const completeLesson = useCompleteLessonMutation();
   const [currentStep, setCurrentStep] = useState(0);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [startTime, setStartTime] = useState<Date | null>(null);
-  const [saving, setSaving] = useState(false);
   const [snackOpen, setSnackOpen] = useState(false);
 
   // TTS（Web Speech API）
@@ -223,30 +198,10 @@ const LessonDetail: React.FC = () => {
     </Box>
   ) : null;
 
+  // レッスンごとに学習時間の計測を開始する
   useEffect(() => {
     if (!lessonId) return;
-    // 画面遷移時はリクエストを中断し、アンマウント後の state 更新を防ぐ
-    const controller = new AbortController();
-    const { signal } = controller;
     setStartTime(new Date());
-    axios
-      .get(`${API_BASE_URL}/api/lessons/${lessonId}/`, { signal })
-      .then((res) => {
-        if (signal.aborted) return null;
-        setLesson(res.data);
-        return axios.get(`${API_BASE_URL}/api/scenes/${res.data.scene}/`, { signal });
-      })
-      .then((res) => {
-        if (!res || signal.aborted) return;
-        setScene(res.data);
-        setLoading(false);
-      })
-      .catch((err) => {
-        if (signal.aborted || isAbortError(err)) return;
-        setError("レッスン取得エラー: " + getErrorMessage(err));
-        setLoading(false);
-      });
-    return () => controller.abort();
   }, [lessonId]);
 
   // 完了後の画面遷移タイマー（アンマウント時に解除）
@@ -277,7 +232,7 @@ const LessonDetail: React.FC = () => {
     }
   };
 
-  const handleComplete = async () => {
+  const handleComplete = () => {
     setCompletedSteps([...completedSteps, currentStep]);
     const timeSpent = startTime ? Math.floor((new Date().getTime() - startTime.getTime()) / 1000) : 0;
     // スコアを100%を超えないように制限
@@ -285,19 +240,24 @@ const LessonDetail: React.FC = () => {
     const score = Math.min(calculatedScore, 100);
     // 学習進捗はブラウザにも保存し、サーバーの保存状況に関わらず履歴に反映する
     pushLocalProgress({ lesson: Number(lessonId), score, time_spent: timeSpent });
-    try {
-      setSaving(true);
-      await axios
-        .post(`${API_BASE_URL}/api/progress/complete_lesson/`, {
-          lesson_id: lessonId, score, time_spent: timeSpent
-        })
-        .catch(() => undefined);
-      setSnackOpen(true);
-      navigateTimerRef.current = setTimeout(() => navigate('/progress'), 1200);
-    } finally {
-      setSaving(false);
-    }
+    // サーバへの保存結果に関わらず、完了を通知して履歴画面へ進む
+    completeLesson.mutate(
+      { lessonId: lessonId ?? "", score, timeSpent },
+      {
+        onSettled: () => {
+          setSnackOpen(true);
+          navigateTimerRef.current = setTimeout(() => navigate('/progress'), 1200);
+        },
+      }
+    );
   };
+
+  const lesson = lessonQuery.data ?? null;
+  const scene = sceneQuery.data ?? null;
+  const saving = completeLesson.isPending;
+  const loading = lessonQuery.isPending || (!!lesson && sceneQuery.isPending);
+  const failed = lessonQuery.isError && !lesson ? lessonQuery.error : sceneQuery.isError && !scene ? sceneQuery.error : null;
+  const error = failed ? "レッスン取得エラー: " + getErrorMessage(failed) : null;
 
   if (loading) {
     return (
