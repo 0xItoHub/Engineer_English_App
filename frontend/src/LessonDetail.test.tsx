@@ -130,6 +130,21 @@ test('サーバに保存できない場合は進捗をローカルに保存す�
   );
 });
 
+test('サーバに保存できた場合も進捗をローカルに保存する', async () => {
+  mockLessonApi();
+  mockedAxios.post.mockResolvedValue({ status: 200, data: { ok: true } });
+  renderLessonDetail();
+
+  fireEvent.click(await screen.findByRole('button', { name: '次へ' }));
+  fireEvent.click(screen.getByRole('button', { name: '次へ' }));
+  fireEvent.click(screen.getByRole('button', { name: '次へ' }));
+  fireEvent.click(screen.getByRole('button', { name: 'レッスン完了' }));
+
+  expect(await screen.findByText('レッスンを完了しました！')).toBeInTheDocument();
+  const saved = JSON.parse(window.localStorage.getItem(LOCAL_PROGRESS_KEY) || '[]');
+  expect(saved).toEqual([expect.objectContaining({ lesson: 5, score: 100 })]);
+});
+
 test('レッスン取得に失敗した場合は分かりやすいエラーを表示する', async () => {
   mockedAxios.get.mockRejectedValue({ isAxiosError: true, message: 'Request failed', response: { status: 500 } });
   renderLessonDetail();

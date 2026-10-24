@@ -33,7 +33,6 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
-    "channels",
     "corsheaders",
     "core",
 ]
@@ -89,12 +88,6 @@ USE_TZ = True
 STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Channels – use in‑memory for local dev.  In prod, switch to Redis.
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer",
-    }
-}
 
 # CORS/CSRF: 既定は許可なし。本番はフロントエンドのオリジンのみを環境変数で指定
 if os.getenv("DJANGO_CORS_ALLOW_ALL", "False") == "True":
