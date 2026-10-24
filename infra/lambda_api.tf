@@ -1,3 +1,10 @@
+# 環境ごとの設定は変数で管理（未指定時は同じ構成内のリソースから導出）
+locals {
+  api_host             = replace(aws_apigatewayv2_api.http_api.api_endpoint, "https://", "")
+  allowed_hosts        = var.allowed_hosts != "" ? var.allowed_hosts : local.api_host
+  cors_allowed_origins = var.cors_allowed_origins != "" ? var.cors_allowed_origins : try("https://${aws_cloudfront_distribution.frontend[0].domain_name}", "")
+}
+
 resource "aws_lambda_function" "backend" {
   function_name = "${var.project_name}-api"
   package_type  = "Image"
@@ -8,12 +15,14 @@ resource "aws_lambda_function" "backend" {
 
   environment {
     variables = {
-      DJANGO_SETTINGS_MODULE = "engineer_english.settings"
-      DJANGO_DEBUG           = var.django_debug
-      DJANGO_ALLOWED_HOSTS   = var.allowed_hosts
-      DJANGO_CORS_ALLOW_ALL  = "True"
-      SQLITE_PATH            = var.sqlite_path
-      STARTUP_COPY_SEED_DB   = var.startup_copy_seed_db
+      DJANGO_SETTINGS_MODULE      = "engineer_english.settings"
+      DJANGO_DEBUG                = var.django_debug
+      DJANGO_ALLOWED_HOSTS        = local.allowed_hosts
+      DJANGO_CORS_ALLOWED_ORIGINS = local.cors_allowed_origins
+      # SECRET_KEY の値は SSM Parameter Store に置き、ここではパラメータ名のみ渡す
+      DJANGO_SECRET_KEY_SSM_PARAM = var.secret_key_ssm_param_name
+      SQLITE_PATH                 = var.sqlite_path
+      STARTUP_COPY_SEED_DB        = var.startup_copy_seed_db
     }
   }
 }
