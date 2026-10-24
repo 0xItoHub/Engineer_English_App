@@ -6,9 +6,8 @@ export type ChatMessage = {
   content: string;
 };
 
-export type SendOptions = {
-  // 将来: streaming?: boolean;
-};
+// 送信オプション（将来: streaming?: boolean などを追加する）
+export type SendOptions = Record<string, never>;
 
 export interface ChatClient {
   send(messages: ChatMessage[], options?: SendOptions): Promise<ChatMessage>;

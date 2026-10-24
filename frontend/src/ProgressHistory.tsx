@@ -88,7 +88,7 @@ const ProgressHistory: React.FC = () => {
       const merged = [...server, ...localAsProgress];
       setProgress(merged);
       setLoading(false);
-    } catch (err) {
+    } catch {
       if (signal?.aborted) return;
       // サーバダウン時はローカルのみ表示（タイトルはフォールバック）
       const local = readLocal();

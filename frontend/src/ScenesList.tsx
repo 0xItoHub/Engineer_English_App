@@ -44,8 +44,8 @@ type LessonLite = { id: number; title: string };
 type Scene = {
   id: number;
   title: string;
-  phrases?: any[];
-  dialogues?: any[];
+  phrases?: unknown[];
+  dialogues?: unknown[];
   lessons?: LessonLite[];
 };
 

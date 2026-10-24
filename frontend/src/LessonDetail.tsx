@@ -164,14 +164,16 @@ const LessonDetail: React.FC = () => {
     try {
       const synth = window.speechSynthesis;
       if (synth?.speaking) synth.cancel();
-    } catch {}
+    } catch {
+      // 読み上げを停止できない環境では何もしない
+    }
     resetSpeaking();
   };
 
   useEffect(() => {
     return () => {
       // アンマウント時に停止
-      try { window.speechSynthesis?.cancel(); } catch {}
+      try { window.speechSynthesis?.cancel(); } catch { /* 読み上げ非対応の環境では何もしない */ }
     };
   }, []);
 
