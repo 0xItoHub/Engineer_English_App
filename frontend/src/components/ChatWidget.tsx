@@ -32,6 +32,8 @@ const ChatWidget: React.FC = () => {
     }
   }, [messages, open]);
 
+  const close = () => setOpen(false);
+
   const send = async () => {
     const text = input.trim();
     if (!text || busy) return;
@@ -56,19 +58,40 @@ const ChatWidget: React.FC = () => {
 
   return (
     <>
-      <Fab color="primary" aria-label="chat" onClick={() => setOpen(true)} sx={{ position: "fixed", right: 24, bottom: 24, zIndex: 1300 }}>
+      <Fab
+        color="primary"
+        aria-label="AIチャットを開く"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-controls={open ? "chat-dialog" : undefined}
+        onClick={() => setOpen(true)}
+        sx={{ position: "fixed", right: 24, bottom: 24, zIndex: 1300 }}
+      >
         <ChatIcon />
       </Fab>
 
-      <Modal open={open} onClose={() => setOpen(false)}>
-        <Box sx={{ position: "fixed", right: 24, bottom: 96, width: { xs: '90vw', sm: 420 }, height: { xs: '70vh', sm: '70vh' } }}>
+      {/* Modal がフォーカストラップ・Esc で閉じる・閉じた後のフォーカス復帰を担う */}
+      <Modal open={open} onClose={close}>
+        <Box
+          id="chat-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="chat-dialog-title"
+          sx={{ position: "fixed", right: 24, bottom: 96, width: { xs: '90vw', sm: 420 }, height: { xs: '70vh', sm: '70vh' }, outline: 'none' }}
+        >
           <Paper elevation={6} sx={{ p: 1.5, display: 'flex', flexDirection: 'column', height: '100%' }}>
             <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>AI Chat</Typography>
-              <IconButton size="small" onClick={() => setOpen(false)}><CloseIcon /></IconButton>
+              <Typography id="chat-dialog-title" variant="subtitle1" component="h2" sx={{ fontWeight: 600 }}>AI Chat</Typography>
+              <IconButton size="small" onClick={close} aria-label="チャットを閉じる"><CloseIcon /></IconButton>
             </Stack>
             <Divider />
-            <Box ref={listRef} sx={{ flex: 1, overflowY: 'auto', my: 1, px: 1 }}>
+            <Box
+              ref={listRef}
+              role="log"
+              aria-live="polite"
+              aria-label="チャットのメッセージ"
+              sx={{ flex: 1, overflowY: 'auto', my: 1, px: 1 }}
+            >
               <Stack spacing={1.5}>
                 {messages.map((m) => {
                   const isUser = m.role === 'user';
@@ -95,10 +118,25 @@ const ChatWidget: React.FC = () => {
             </Box>
             <Divider />
             <Stack direction="row" spacing={1} sx={{ pt: 1 }}>
-              <TextField fullWidth size="small" placeholder="メッセージを入力" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') send(); }} />
+              <TextField
+                fullWidth
+                size="small"
+                placeholder="メッセージを入力"
+                value={input}
+                autoFocus
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  // 日本語入力の変換確定（IME）中の Enter では送信しない
+                  if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                    send();
+                  }
+                }}
+                slotProps={{ htmlInput: { "aria-label": "メッセージを入力" } }}
+              />
               <Tooltip title="送信">
                 <span>
-                  <IconButton color="primary" onClick={send} disabled={busy} sx={{ alignSelf: 'center' }}>
+                  <IconButton color="primary" onClick={send} disabled={busy} aria-label="送信" sx={{ alignSelf: 'center' }}>
                     <SendIcon />
                   </IconButton>
                 </span>

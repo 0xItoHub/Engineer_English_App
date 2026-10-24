@@ -99,14 +99,35 @@ function App() {
       <CssBaseline />
       <Router>
         <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+          {/* キーボード利用者向け：本文へスキップ（フォーカス時のみ表示） */}
+          <Box
+            component="a"
+            href="#main-content"
+            sx={{
+              position: 'absolute',
+              left: 8,
+              top: -48,
+              zIndex: 2000,
+              px: 2,
+              py: 1,
+              bgcolor: 'background.paper',
+              color: 'primary.main',
+              borderRadius: 1,
+              boxShadow: 3,
+              '&:focus': { top: 8 },
+            }}
+          >
+            本文へスキップ
+          </Box>
           {/* ヘッダー */}
           <AppBar position="static" elevation={2}>
             <Toolbar>
-              <SchoolIcon sx={{ mr: 2 }} />
+              <SchoolIcon sx={{ mr: 2 }} aria-hidden="true" />
               <Typography
                 variant="h6"
                 component={RouterLink}
                 to="/"
+                aria-label="Engineer English App ホームへ"
                 sx={{ flexGrow: 1, color: 'inherit', textDecoration: 'none', fontFamily: `'Cormorant Garamond','Playfair Display',serif`, fontStyle: 'italic', letterSpacing: 0.5 }}
               >
                 Engineer English App
@@ -123,7 +144,7 @@ function App() {
           </AppBar>
 
           {/* メインコンテンツ */}
-          <Container maxWidth="lg" sx={{ mt: 4, mb: 6, flex: 1 }}>
+          <Container component="main" id="main-content" tabIndex={-1} maxWidth="lg" sx={{ mt: 4, mb: 6, flex: 1, outline: 'none' }}>
             <AppRoutes />
           </Container>
 

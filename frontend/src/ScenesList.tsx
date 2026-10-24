@@ -125,7 +125,7 @@ const ScenesList: React.FC = () => {
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress size={60} />
+        <CircularProgress size={60} aria-label="読み込み中" />
       </Box>
     );
   }
@@ -174,13 +174,15 @@ const ScenesList: React.FC = () => {
             </Button>
           </Box>
 
-          {/* ヒーローカルーセル */}
-          <Box sx={{ position: 'relative', height: 220, borderRadius: 0, overflow: 'hidden' }}>
+          {/* ヒーローカルーセル（装飾画像のため支援技術からは隠す） */}
+          <Box aria-hidden="true" sx={{ position: 'relative', height: 220, borderRadius: 0, overflow: 'hidden' }}>
             <Box
               sx={{
                 display: 'flex',
                 width: '200%',
                 animation: `${slide} 45s linear infinite`,
+                // 「視差効果を減らす」設定時はスライドを停止
+                '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
               }}
             >
               {[...heroImages, ...heroImages].map((src, idx) => (
@@ -188,7 +190,7 @@ const ScenesList: React.FC = () => {
                   key={idx}
                   component="img"
                   src={src}
-                  alt="learn-english-hero"
+                  alt=""
                   sx={{ width: `${100 / (heroImages.length * 2)}%`, height: '220px', objectFit: 'cover' }}
                 />
               ))}
@@ -208,7 +210,7 @@ const ScenesList: React.FC = () => {
             </Typography>
           </Paper>
         ) : (
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+          <Box component="section" aria-label="シーン一覧" sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
             {scenes.map((scene) => {
               const { done, total, percent } = getSceneProgress(scene);
               return (
@@ -225,7 +227,12 @@ const ScenesList: React.FC = () => {
                           <Typography variant="caption" color="text.secondary">進捗</Typography>
                           <Typography variant="caption" color="text.secondary">{percent}% ({done}/{total})</Typography>
                         </Box>
-                        <LinearProgress variant="determinate" value={percent} sx={{ height: 8, borderRadius: 4 }} />
+                        <LinearProgress
+                          variant="determinate"
+                          value={percent}
+                          aria-label={`${scene.title} の進捗`}
+                          sx={{ height: 8, borderRadius: 4 }}
+                        />
                       </Box>
 
                       {/* メタ情報（任意） */}
@@ -243,6 +250,7 @@ const ScenesList: React.FC = () => {
                         variant="contained"
                         fullWidth
                         onClick={() => handleStartLearning(scene.id)}
+                        aria-label={`${scene.title} の学習を開始`}
                         sx={{
                           bgcolor: 'primary.light',
                           color: 'primary.contrastText',

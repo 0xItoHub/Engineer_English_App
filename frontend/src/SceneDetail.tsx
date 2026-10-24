@@ -138,7 +138,7 @@ const SceneDetail: React.FC = () => {
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress size={60} />
+        <CircularProgress size={60} aria-label="読み込み中" />
       </Box>
     );
   }
@@ -172,7 +172,7 @@ const SceneDetail: React.FC = () => {
         </Button>
         <Paper elevation={0} sx={{ p: 3, backgroundColor: "#f5f5f5" }}>
           <Typography variant="h4" component="h1" gutterBottom>
-            📚 {scene.title}
+            <span aria-hidden="true">📚</span> {scene.title}
           </Typography>
         </Paper>
       </Box>
@@ -190,7 +190,7 @@ const SceneDetail: React.FC = () => {
             
             {lessons.length > 0 ? (
               <>
-                <List>
+                <List aria-label="レッスン一覧">
                   {paginated.map((lesson) => {
                     const score = getLessonScore(lesson.id);
                     return (
@@ -200,6 +200,7 @@ const SceneDetail: React.FC = () => {
                           size="small"
                           startIcon={<PlayIcon />}
                           onClick={() => handleStartLesson(lesson.id)}
+                          aria-label={`${lesson.title} を開始`}
                         >
                           開始
                         </Button>
@@ -215,6 +216,7 @@ const SceneDetail: React.FC = () => {
                                   value={100}
                                   size={42}
                                   thickness={4}
+                                  aria-hidden="true"
                                   sx={{
                                     color: (theme) => theme.palette.divider,
                                     position: 'absolute',
@@ -222,7 +224,13 @@ const SceneDetail: React.FC = () => {
                                     top: 0,
                                   }}
                                 />
-                                <CircularProgress variant="determinate" value={score} size={42} thickness={4} />
+                                <CircularProgress
+                                  variant="determinate"
+                                  value={score}
+                                  size={42}
+                                  thickness={4}
+                                  aria-label={`${lesson.title} のスコア`}
+                                />
                                 <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                   <Typography variant="caption" color="text.secondary">{`${score}%`}</Typography>
                                 </Box>

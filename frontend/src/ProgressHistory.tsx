@@ -141,7 +141,7 @@ const ProgressHistory: React.FC = () => {
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress size={60} />
+        <CircularProgress size={60} aria-label="読み込み中" />
       </Box>
     );
   }
@@ -162,7 +162,7 @@ const ProgressHistory: React.FC = () => {
         </Button>
         <Paper elevation={0} sx={{ p: 3, backgroundColor: "#f5f5f5" }}>
           <Typography variant="h4" component="h1" gutterBottom>
-            📊 学習履歴
+            <span aria-hidden="true">📊</span> 学習履歴
           </Typography>
           <Typography variant="body1" color="text.secondary">
             あなたの学習進捗と成果を確認できます
@@ -171,7 +171,7 @@ const ProgressHistory: React.FC = () => {
       </Box>
 
       <Box sx={{ mb: 4 }}>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+        <Box component="section" aria-label="学習サマリー" sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
           <Box sx={{ flex: '1 1 300px', minWidth: '250px' }}>
             <Card elevation={2}>
               <CardContent sx={{ textAlign: 'center' }}>
@@ -218,9 +218,9 @@ const ProgressHistory: React.FC = () => {
       ) : (
         <Card elevation={2}>
           <CardContent>
-            <Typography variant="h6" gutterBottom>学習履歴一覧</Typography>
+            <Typography variant="h6" component="h2" id="progress-table-title" gutterBottom>学習履歴一覧</Typography>
             <TableContainer>
-              <Table>
+              <Table aria-labelledby="progress-table-title">
                 <TableHead>
                   <TableRow>
                     <TableCell>レッスン</TableCell>
@@ -239,7 +239,12 @@ const ProgressHistory: React.FC = () => {
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <Typography variant="body2">{Math.min(item.score, 100)}%</Typography>
-                          <LinearProgress variant="determinate" value={Math.min(item.score, 100)} sx={{ width: 60, height: 6, borderRadius: 3 }} />
+                          <LinearProgress
+                            variant="determinate"
+                            value={Math.min(item.score, 100)}
+                            aria-label={`${item.lesson_title} のスコア`}
+                            sx={{ width: 60, height: 6, borderRadius: 3 }}
+                          />
                         </Box>
                       </TableCell>
                       <TableCell><Typography variant="body2" color="text.secondary">{formatTime(item.time_spent)}</Typography></TableCell>

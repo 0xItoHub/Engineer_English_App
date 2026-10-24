@@ -11,7 +11,7 @@ const SiteFooter: React.FC = () => {
           <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
             Engineer English Inc.
           </Typography>
-          <Stack direction="row" spacing={3}>
+          <Stack component="nav" aria-label="フッターナビゲーション" direction="row" spacing={3}>
             <MuiLink component={RouterLink} to="/terms" underline="hover" color="inherit">
               利用規約
             </MuiLink>

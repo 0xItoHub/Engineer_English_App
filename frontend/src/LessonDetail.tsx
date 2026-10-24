@@ -18,7 +18,9 @@ import {
   Chip,
   Snackbar,
   IconButton,
-  Tooltip
+  Tooltip,
+  ToggleButton,
+  ToggleButtonGroup
 } from "@mui/material";
 import { 
   ArrowBack as ArrowBackIcon,
@@ -63,6 +65,20 @@ type Dialogue = {
   order: number;
 };
 
+// 読み上げ速度の選択肢
+const SPEECH_RATES = [0.75, 1, 1.25, 1.5];
+const DEFAULT_SPEECH_RATE = 1.5;
+
+// Web Speech API（音声合成）が利用できるか
+function isSpeechSynthesisSupported(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    "speechSynthesis" in window &&
+    !!window.speechSynthesis &&
+    typeof window.SpeechSynthesisUtterance !== "undefined"
+  );
+}
+
 const LessonDetail: React.FC = () => {
   const { lessonId } = useParams<{ lessonId: string }>();
   const navigate = useNavigate();
@@ -81,13 +97,17 @@ const LessonDetail: React.FC = () => {
   const [speakingId, setSpeakingId] = useState<number | null>(null);
   const [speakingDialogueId, setSpeakingDialogueId] = useState<number | null>(null);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  // 読み上げ速度（既定はネイティブ並みの 1.5 倍）
+  const [speechRate, setSpeechRate] = useState<number>(DEFAULT_SPEECH_RATE);
+  const ttsSupported = isSpeechSynthesisSupported();
 
   useEffect(() => {
+    if (!isSpeechSynthesisSupported()) return;
     const synth = window.speechSynthesis;
     const loadVoices = () => setVoices(synth.getVoices());
     loadVoices();
-    synth.addEventListener("voiceschanged", loadVoices);
-    return () => synth.removeEventListener("voiceschanged", loadVoices);
+    synth.addEventListener?.("voiceschanged", loadVoices);
+    return () => synth.removeEventListener?.("voiceschanged", loadVoices);
   }, []);
 
   const pickEnglishVoice = () => {
@@ -106,73 +126,102 @@ const LessonDetail: React.FC = () => {
     );
   };
 
-  const speak = (phrase: Phrase) => {
-    try {
-      const synth = window.speechSynthesis;
-      if (synth.speaking) {
-        synth.cancel();
-      }
-      const u = new SpeechSynthesisUtterance(phrase.text_en);
-      const voice = pickEnglishVoice();
-      if (voice) u.voice = voice;
-      u.lang = voice?.lang || "en-US";
-      // ネイティブ並みのスピード感
-      u.rate = 1.5;   // かなり速め（上限は環境で異なります）
-      u.pitch = 1.0;  // 標準ピッチに戻す
-      u.onend = () => {
-        setSpeakingId(null);
-        setSpeakingDialogueId(null);
-        utteranceRef.current = null;
-      };
-      utteranceRef.current = u;
-      setSpeakingId(phrase.id);
-      setSpeakingDialogueId(null);
-      synth.speak(u);
-    } catch (e) {
-      console.error("TTS error", e);
-    }
-  };
-
-  const speakDialogue = (dialogue: Dialogue) => {
-    try {
-      const synth = window.speechSynthesis;
-      if (synth.speaking) {
-        synth.cancel();
-      }
-      const u = new SpeechSynthesisUtterance(dialogue.line_en);
-      const voice = pickEnglishVoice();
-      if (voice) u.voice = voice;
-      u.lang = voice?.lang || "en-US";
-      u.rate = 1.5;
-      u.pitch = 1.0;
-      u.onend = () => {
-        setSpeakingId(null);
-        setSpeakingDialogueId(null);
-        utteranceRef.current = null;
-      };
-      utteranceRef.current = u;
-      setSpeakingDialogueId(dialogue.id);
-      setSpeakingId(null);
-      synth.speak(u);
-    } catch (e) {
-      console.error("TTS error", e);
-    }
-  };
-
-  const stopSpeaking = () => {
-    const synth = window.speechSynthesis;
-    if (synth.speaking) synth.cancel();
+  const resetSpeaking = () => {
     setSpeakingId(null);
     setSpeakingDialogueId(null);
     utteranceRef.current = null;
   };
 
+  // フレーズ・対話共通の読み上げ処理
+  const speakText = (text: string, target: { phraseId?: number; dialogueId?: number }) => {
+    if (!isSpeechSynthesisSupported()) return;
+    try {
+      const synth = window.speechSynthesis;
+      if (synth.speaking) {
+        synth.cancel();
+      }
+      const u = new SpeechSynthesisUtterance(text);
+      const voice = pickEnglishVoice();
+      if (voice) u.voice = voice;
+      u.lang = voice?.lang || "en-US";
+      u.rate = speechRate; // 上限は環境で異なります
+      u.pitch = 1.0;  // 標準ピッチ
+      u.onend = resetSpeaking;
+      u.onerror = resetSpeaking;
+      utteranceRef.current = u;
+      setSpeakingId(target.phraseId ?? null);
+      setSpeakingDialogueId(target.dialogueId ?? null);
+      synth.speak(u);
+    } catch (e) {
+      console.error("TTS error", e);
+      resetSpeaking();
+    }
+  };
+
+  const speak = (phrase: Phrase) => speakText(phrase.text_en, { phraseId: phrase.id });
+
+  const speakDialogue = (dialogue: Dialogue) => speakText(dialogue.line_en, { dialogueId: dialogue.id });
+
+  const stopSpeaking = () => {
+    try {
+      const synth = window.speechSynthesis;
+      if (synth?.speaking) synth.cancel();
+    } catch {}
+    resetSpeaking();
+  };
+
   useEffect(() => {
     return () => {
       // アンマウント時に停止
-      try { window.speechSynthesis.cancel(); } catch {}
+      try { window.speechSynthesis?.cancel(); } catch {}
     };
   }, []);
+
+  // 読み上げボタン（非対応ブラウザでは無効化して案内を表示）
+  const renderSpeakButton = (label: string, speaking: boolean, onSpeak: () => void) => {
+    if (!ttsSupported) {
+      return (
+        <Tooltip title="お使いのブラウザは音声読み上げに対応していません">
+          <span>
+            <IconButton color="primary" disabled aria-label={`${label}（音声読み上げ非対応）`}>
+              <VolumeUpIcon />
+            </IconButton>
+          </span>
+        </Tooltip>
+      );
+    }
+    return speaking ? (
+      <Tooltip title="停止">
+        <IconButton color="error" onClick={stopSpeaking} aria-label={`${label} の読み上げを停止`}>
+          <StopCircleIcon />
+        </IconButton>
+      </Tooltip>
+    ) : (
+      <Tooltip title="英語で読み上げ">
+        <IconButton color="primary" onClick={onSpeak} aria-label={`${label} を英語で読み上げ`}>
+          <VolumeUpIcon />
+        </IconButton>
+      </Tooltip>
+    );
+  };
+
+  // 読み上げ速度の切り替え（読み上げ対応時のみ表示）
+  const speechRateControl = ttsSupported ? (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+      <Typography variant="body2" color="text.secondary" id="speech-rate-label">読み上げ速度</Typography>
+      <ToggleButtonGroup
+        size="small"
+        exclusive
+        value={speechRate}
+        onChange={(_e, v: number | null) => { if (v != null) setSpeechRate(v); }}
+        aria-labelledby="speech-rate-label"
+      >
+        {SPEECH_RATES.map((r) => (
+          <ToggleButton key={r} value={r} aria-label={`${r} 倍速`}>{r}x</ToggleButton>
+        ))}
+      </ToggleButtonGroup>
+    </Box>
+  ) : null;
 
   useEffect(() => {
     if (!lessonId) return;
@@ -257,7 +306,7 @@ const LessonDetail: React.FC = () => {
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress size={60} />
+        <CircularProgress size={60} aria-label="読み込み中" />
       </Box>
     );
   }
@@ -281,7 +330,7 @@ const LessonDetail: React.FC = () => {
         </Button>
         <Paper elevation={0} sx={{ p: 3, backgroundColor: "#f5f5f5" }}>
           <Typography variant="h4" component="h1" gutterBottom>
-            📚 {lesson.title}
+            <span aria-hidden="true">📚</span> {lesson.title}
           </Typography>
           <Typography variant="body1" color="text.secondary">
             {lesson.description}
@@ -299,7 +348,7 @@ const LessonDetail: React.FC = () => {
             {currentStep + 1} / {steps.length}
           </Typography>
         </Box>
-        <LinearProgress variant="determinate" value={progress} sx={{ height: 8, borderRadius: 4 }} />
+        <LinearProgress variant="determinate" value={progress} aria-label="レッスンの進捗" sx={{ height: 8, borderRadius: 4 }} />
       </Box>
 
       {/* ステッパー */}
@@ -314,12 +363,12 @@ const LessonDetail: React.FC = () => {
       </Box>
 
       {/* 学習コンテンツ */}
-      <Card elevation={2}>
+      <Card elevation={2} component="section" aria-label={steps[currentStep]}>
         <CardContent>
           {currentStep === 0 && (
             <Box>
-              <Typography variant="h6" gutterBottom>
-                🎯 レッスン概要
+              <Typography variant="h6" component="h2" gutterBottom>
+                <span aria-hidden="true">🎯</span> レッスン概要
               </Typography>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -336,7 +385,8 @@ const LessonDetail: React.FC = () => {
 
           {currentStep === 1 && (
             <Box>
-              <Typography variant="h6" gutterBottom>📖 フレーズ学習</Typography>
+              <Typography variant="h6" component="h2" gutterBottom><span aria-hidden="true">📖</span> フレーズ学習</Typography>
+              {lesson.lesson_phrases && lesson.lesson_phrases.length > 0 && speechRateControl}
               {lesson.lesson_phrases && lesson.lesson_phrases.length > 0 ? (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   {lesson.lesson_phrases.map((p) => (
@@ -344,24 +394,12 @@ const LessonDetail: React.FC = () => {
                       <CardContent>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
                           <Box>
-                            <Typography variant="h6" gutterBottom>{p.text_en}</Typography>
+                            <Typography variant="h6" component="p" lang="en" gutterBottom>{p.text_en}</Typography>
                             <Typography variant="body1" color="text.secondary" gutterBottom>{p.text_ja}</Typography>
                             {p.note && (<Typography variant="caption" color="text.secondary">メモ: {p.note}</Typography>)}
                           </Box>
                           <Box>
-                            {speakingId === p.id ? (
-                              <Tooltip title="停止">
-                                <IconButton color="error" onClick={stopSpeaking}>
-                                  <StopCircleIcon />
-                                </IconButton>
-                              </Tooltip>
-                            ) : (
-                              <Tooltip title="英語で読み上げ">
-                                <IconButton color="primary" onClick={() => speak(p)}>
-                                  <VolumeUpIcon />
-                                </IconButton>
-                              </Tooltip>
-                            )}
+                            {renderSpeakButton(p.text_en, speakingId === p.id, () => speak(p))}
                           </Box>
                         </Box>
                       </CardContent>
@@ -376,7 +414,8 @@ const LessonDetail: React.FC = () => {
 
           {currentStep === 2 && (
             <Box>
-              <Typography variant="h6" gutterBottom>💬 対話練習</Typography>
+              <Typography variant="h6" component="h2" gutterBottom><span aria-hidden="true">💬</span> 対話練習</Typography>
+              {lesson.lesson_dialogues && lesson.lesson_dialogues.length > 0 && speechRateControl}
               {lesson.lesson_dialogues && lesson.lesson_dialogues.length > 0 ? (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   {lesson.lesson_dialogues.map((d) => (
@@ -387,21 +426,9 @@ const LessonDetail: React.FC = () => {
                           <Typography variant="body2" color="text.secondary">順序: {d.order}</Typography>
                         </Box>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
-                          <Typography variant="h6" gutterBottom sx={{ mb: 0 }}>{d.line_en}</Typography>
+                          <Typography variant="h6" component="p" lang="en" gutterBottom sx={{ mb: 0 }}>{d.line_en}</Typography>
                           <Box>
-                            {speakingDialogueId === d.id ? (
-                              <Tooltip title="停止">
-                                <IconButton color="error" onClick={stopSpeaking}>
-                                  <StopCircleIcon />
-                                </IconButton>
-                              </Tooltip>
-                            ) : (
-                              <Tooltip title="英語で読み上げ">
-                                <IconButton color="primary" onClick={() => speakDialogue(d)}>
-                                  <VolumeUpIcon />
-                                </IconButton>
-                              </Tooltip>
-                            )}
+                            {renderSpeakButton(d.line_en, speakingDialogueId === d.id, () => speakDialogue(d))}
                           </Box>
                         </Box>
                         <Typography variant="body1" color="text.secondary">{d.line_ja}</Typography>
@@ -417,7 +444,7 @@ const LessonDetail: React.FC = () => {
 
           {currentStep === 3 && (
             <Box>
-              <Typography variant="h6" gutterBottom>🎉 まとめ</Typography>
+              <Typography variant="h6" component="h2" gutterBottom><span aria-hidden="true">🎉</span> まとめ</Typography>
               <Typography variant="body1" paragraph>お疲れさまでした！このレッスンは完了です。</Typography>
             </Box>
           )}
