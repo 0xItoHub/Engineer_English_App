@@ -48,4 +48,16 @@ variable "sqlite_path" {
 variable "startup_copy_seed_db" {
   type    = string
   default = "1"
-} 
+}
+
+variable "api_throttling_burst_limit" {
+  type        = number
+  default     = 5000
+  description = "API Gateway のバースト上限（リクエスト数）"
+}
+
+variable "api_throttling_rate_limit" {
+  type        = number
+  default     = 10000
+  description = "API Gateway の定常上限（リクエスト/秒）"
+}
