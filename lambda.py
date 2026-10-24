@@ -9,7 +9,9 @@ if os.getenv("STARTUP_COPY_SEED_DB", "1") == "1" and SEED.exists() and not TMP.e
     TMP.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy(SEED, TMP)
 
-from mangum import Mangum
-from engineer_english.asgi import application
+# シードDBのコピー後に Django を読み込むため、ここでインポートする
+from mangum import Mangum  # noqa: E402
+
+from engineer_english.asgi import application  # noqa: E402
 
 handler = Mangum(application)

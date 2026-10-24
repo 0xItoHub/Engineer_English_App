@@ -1,0 +1,26 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = [
+    "frontend",
+    "infra",
+    "**/migrations/**",
+    ".venv",
+    "venv",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "DJ"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["core", "engineer_english"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "engineer_english.settings_test"
+testpaths = ["core/tests"]
+python_files = ["test_*.py"]
+addopts = "-ra"
+
+[tool.coverage.run]
+source = ["core", "engineer_english"]
+omit = ["*/migrations/*", "*/tests/*"]

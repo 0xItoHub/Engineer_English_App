@@ -1,5 +1,6 @@
 # Python
 venv/
+.venv/
 __pycache__/
 *.pyc
 *.pyo
@@ -33,3 +34,7 @@ infra/response.json
 
 # VSCode
 .vscode/ 
+# Environment
+.env
+.env.*
+!.env.example

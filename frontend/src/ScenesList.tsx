@@ -22,6 +22,8 @@ import {
   TrendingUp as TrendingUpIcon
 } from "@mui/icons-material";
 import AnimatedCodeBackground from "./components/AnimatedCodeBackground";
+import { isAbortError } from "./lib/http";
+import { readLocalProgress } from "./lib/storage";
 
 // APIのベースURL設定
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
@@ -38,8 +40,6 @@ const slide = keyframes`
   0% { transform: translateX(0); }
   100% { transform: translateX(-50%); }
 `;
-
-const LOCAL_PROGRESS_KEY = "ee_local_progress";
 
 type LessonLite = { id: number; title: string };
 
@@ -65,17 +65,6 @@ const ScenesList: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  function readLocalProgress(): ProgressEntry[] {
-    try {
-      const raw = localStorage.getItem(LOCAL_PROGRESS_KEY);
-      if (!raw) return [];
-      const list = JSON.parse(raw) as ProgressEntry[];
-      return Array.isArray(list) ? list : [];
-    } catch {
-      return [];
-    }
-  }
-
   function mergeProgress(serverList: ProgressEntry[], localList: ProgressEntry[]): ProgressEntry[] {
     const map = new Map<number, ProgressEntry>();
     for (const p of serverList) map.set(p.lesson, { ...p });
@@ -92,18 +81,23 @@ const ScenesList: React.FC = () => {
   }
 
   useEffect(() => {
+    // 画面を離れたらリクエストを中断し、アンマウント後の state 更新を防ぐ
+    const controller = new AbortController();
+    const { signal } = controller;
     const fetchAll = async () => {
       try {
         const [scenesRes, progressRes] = await Promise.all([
-          axios.get(`${API_BASE_URL}/api/scenes/`),
-          axios.get(`${API_BASE_URL}/api/progress/my_progress/`).catch(() => ({ data: [] }))
+          axios.get(`${API_BASE_URL}/api/scenes/`, { signal }),
+          axios.get(`${API_BASE_URL}/api/progress/my_progress/`, { signal }).catch(() => ({ data: [] }))
         ]);
-        setScenes(scenesRes.data);
-        const serverProgress: ProgressEntry[] = progressRes.data || [];
+        if (signal.aborted) return;
+        setScenes(Array.isArray(scenesRes.data) ? scenesRes.data : []);
+        const serverProgress: ProgressEntry[] = Array.isArray(progressRes.data) ? progressRes.data : [];
         const localProgress = readLocalProgress();
         setProgress(mergeProgress(serverProgress, localProgress));
         setLoading(false);
-      } catch (err: any) {
+      } catch (err: unknown) {
+        if (signal.aborted || isAbortError(err)) return;
         // サーバが落ちていても、ローカル進捗だけは表示
         setScenes([]);
         setProgress(readLocalProgress());
@@ -112,6 +106,7 @@ const ScenesList: React.FC = () => {
       }
     };
     fetchAll();
+    return () => controller.abort();
   }, []);
 
   const completedLessonIds = new Set(progress.map(p => p.lesson));
@@ -130,7 +125,7 @@ const ScenesList: React.FC = () => {
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress size={60} />
+        <CircularProgress size={60} aria-label="読み込み中" />
       </Box>
     );
   }
@@ -179,13 +174,15 @@ const ScenesList: React.FC = () => {
             </Button>
           </Box>
 
-          {/* ヒーローカルーセル */}
-          <Box sx={{ position: 'relative', height: 220, borderRadius: 0, overflow: 'hidden' }}>
+          {/* ヒーローカルーセル（装飾画像のため支援技術からは隠す） */}
+          <Box aria-hidden="true" sx={{ position: 'relative', height: 220, borderRadius: 0, overflow: 'hidden' }}>
             <Box
               sx={{
                 display: 'flex',
                 width: '200%',
                 animation: `${slide} 45s linear infinite`,
+                // 「視差効果を減らす」設定時はスライドを停止
+                '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
               }}
             >
               {[...heroImages, ...heroImages].map((src, idx) => (
@@ -193,7 +190,7 @@ const ScenesList: React.FC = () => {
                   key={idx}
                   component="img"
                   src={src}
-                  alt="learn-english-hero"
+                  alt=""
                   sx={{ width: `${100 / (heroImages.length * 2)}%`, height: '220px', objectFit: 'cover' }}
                 />
               ))}
@@ -213,7 +210,7 @@ const ScenesList: React.FC = () => {
             </Typography>
           </Paper>
         ) : (
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+          <Box component="section" aria-label="シーン一覧" sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
             {scenes.map((scene) => {
               const { done, total, percent } = getSceneProgress(scene);
               return (
@@ -230,7 +227,12 @@ const ScenesList: React.FC = () => {
                           <Typography variant="caption" color="text.secondary">進捗</Typography>
                           <Typography variant="caption" color="text.secondary">{percent}% ({done}/{total})</Typography>
                         </Box>
-                        <LinearProgress variant="determinate" value={percent} sx={{ height: 8, borderRadius: 4 }} />
+                        <LinearProgress
+                          variant="determinate"
+                          value={percent}
+                          aria-label={`${scene.title} の進捗`}
+                          sx={{ height: 8, borderRadius: 4 }}
+                        />
                       </Box>
 
                       {/* メタ情報（任意） */}
@@ -248,6 +250,7 @@ const ScenesList: React.FC = () => {
                         variant="contained"
                         fullWidth
                         onClick={() => handleStartLearning(scene.id)}
+                        aria-label={`${scene.title} の学習を開始`}
                         sx={{
                           bgcolor: 'primary.light',
                           color: 'primary.contrastText',
