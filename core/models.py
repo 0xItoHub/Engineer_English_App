@@ -1,5 +1,5 @@
-from django.db import models
 from django.contrib.auth.models import User
+from django.db import models
 
 
 class Scene(models.Model):
@@ -60,9 +60,7 @@ class Dialogue(models.Model):
 
 class UserProgress(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="progress")
-    lesson = models.ForeignKey(
-        Lesson, on_delete=models.CASCADE, related_name="user_progress"
-    )
+    lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, related_name="user_progress")
     completed_at = models.DateTimeField(auto_now_add=True)
     score = models.PositiveIntegerField(default=0, help_text="学習スコア（0-100）")
     time_spent = models.PositiveIntegerField(default=0, help_text="学習時間（秒）")
@@ -72,4 +70,5 @@ class UserProgress(models.Model):
         ordering = ["-completed_at"]
 
     def __str__(self):
-        return f"{self.user.username} - {self.lesson.title} ({self.completed_at.strftime('%Y-%m-%d')})"
+        completed = self.completed_at.strftime("%Y-%m-%d")
+        return f"{self.user.username} - {self.lesson.title} ({completed})"

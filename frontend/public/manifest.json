@@ -1,9 +1,11 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "Engineer English",
+  "name": "Engineer English App",
+  "description": "エンジニアの実務シーンに沿って英語を学べる学習アプリ",
+  "lang": "ja",
   "icons": [
     {
-      "src": "favicon.ico",
+      "src": "favicon001.ico",
       "sizes": "64x64 32x32 24x24 16x16",
       "type": "image/x-icon"
     },
