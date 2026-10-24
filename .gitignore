@@ -34,3 +34,7 @@ infra/response.json
 
 # VSCode
 .vscode/ 
+# Environment
+.env
+.env.*
+!.env.example
