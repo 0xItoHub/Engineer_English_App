@@ -1,6 +1,6 @@
 import React from "react";
 import { Box, Container, Divider, Link as MuiLink, Stack, Typography } from "@mui/material";
-import { Link as RouterLink } from "react-router-dom";
+import { Link as RouterLink } from "react-router";
 
 const SiteFooter: React.FC = () => {
   const year = new Date().getFullYear();

@@ -1,6 +1,6 @@
 import { vi, type Mocked } from 'vitest';
 import { fireEvent, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import axios from 'axios';
 import SceneDetail from './SceneDetail';
 import { LOCAL_PROGRESS_KEY } from './lib/storage';
