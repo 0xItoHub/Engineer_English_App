@@ -16,6 +16,10 @@ updates:
     groups:
       python-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      # Django は LTS（5.2 → 次は 6.2）単位で更新する。5.2.x のパッチは引き続き提案される
+      - dependency-name: "django"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
   # フロントエンド（frontend/package.json）
   - package-ecosystem: npm
@@ -32,6 +36,10 @@ updates:
     groups:
       npm-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      # TypeScript のメジャー更新は Lint ツールの対応状況を確認してから行う
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   # GitHub Actions（.github/workflows）
   - package-ecosystem: github-actions
@@ -80,3 +88,7 @@ updates:
     groups:
       docker-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      # Python のバージョンは CI（setup-python）と揃えて更新する
+      - dependency-name: "public.ecr.aws/lambda/python"
+        update-types: ["version-update:semver-minor"]
