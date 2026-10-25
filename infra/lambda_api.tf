@@ -24,8 +24,10 @@ resource "aws_lambda_function" "backend" {
       DJANGO_FRONTEND_URL = local.frontend_url
       # SECRET_KEY の値は SSM Parameter Store に置き、ここではパラメータ名のみ渡す
       DJANGO_SECRET_KEY_SSM_PARAM = var.secret_key_ssm_param_name
-      SQLITE_PATH                 = var.sqlite_path
-      STARTUP_COPY_SEED_DB        = var.startup_copy_seed_db
+      # Aurora DSQL のエンドポイント（接続はアプリ用ロールで IAM 認証）
+      DSQL_CLUSTER_ENDPOINT = local.dsql_endpoint
+      SQLITE_PATH           = var.sqlite_path
+      STARTUP_COPY_SEED_DB  = var.startup_copy_seed_db
     }
   }
 
