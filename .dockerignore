@@ -13,6 +13,8 @@ db.sqlite3
 seed_db.sqlite3
 frontend/
 infra/
+# 開発用のスクリプト（読み上げ音声の生成など）
+scripts/
 **/infra/
 *.md
 .DS_Store
