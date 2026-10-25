@@ -22,7 +22,8 @@ import {
   School as SchoolIcon,
   CollectionsBookmark as CollectionsBookmarkIcon,
   CheckCircle as CheckCircleIcon,
-  AccessTime as AccessTimeIcon
+  AccessTime as AccessTimeIcon,
+  BarChart as BarChartIcon
 } from "@mui/icons-material";
 import { useScenesQuery, type ProgressItem, type Scene } from "./lib/queries";
 import { queryView } from "./lib/queryState";
@@ -121,8 +122,9 @@ const ProgressHistory: React.FC = () => {
           ホームに戻る
         </Button>
         <Paper elevation={0} sx={{ p: 3, backgroundColor: "#f5f5f5" }}>
-          <Typography variant="h4" component="h1" gutterBottom>
-            <span aria-hidden="true">📊</span> 学習履歴
+          <Typography variant="h4" component="h1" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <BarChartIcon color="primary" fontSize="large" aria-hidden="true" />
+            学習履歴
           </Typography>
           <Typography variant="body1" color="text.secondary">
             あなたの学習進捗と成果を確認できます

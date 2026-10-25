@@ -48,7 +48,7 @@ const ContentStats: React.FC<Props> = ({ stats }) => (
               <Typography variant="body2" color="text.secondary">
                 {label}
               </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ display: "block", mt: 0.5, fontSize: 13 }}>
                 {caption}
               </Typography>
             </CardContent>

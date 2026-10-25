@@ -18,7 +18,8 @@ import {
   ArrowBack as ArrowBackIcon,
   School as SchoolIcon,
   CheckCircle as CheckCircleIcon,
-  Replay as ReplayIcon
+  Replay as ReplayIcon,
+  MenuBook as MenuBookIcon
 } from "@mui/icons-material";
 import { lessonDescription } from "./lib/labels";
 import { useSceneQuery } from "./lib/queries";
@@ -94,8 +95,9 @@ const SceneDetail: React.FC = () => {
           ホームに戻る
         </Button>
         <Paper elevation={0} sx={{ p: 3, backgroundColor: "#f5f5f5" }}>
-          <Typography variant="h4" component="h1" gutterBottom>
-            <span aria-hidden="true">📚</span> {scene.title}
+          <Typography variant="h4" component="h1" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <MenuBookIcon color="primary" fontSize="large" aria-hidden="true" />
+            {scene.title}
           </Typography>
         </Paper>
       </Box>

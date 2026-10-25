@@ -22,7 +22,7 @@ import ChatWidget from "./components/ChatWidget";
 import ErrorBoundary from "./components/ErrorBoundary";
 import NotFound from "./components/NotFound";
 import RouteChangeEffects from "./components/RouteChangeEffects";
-import { usePageTitle } from "./hooks/usePageTitle";
+import { Contact, PrivacyPolicy, Terms } from "./pages/LegalPages";
 import { DISPLAY_FONT_FAMILY, theme } from "./theme";
 import AppAuthProvider from "./components/AppAuthProvider";
 import AuthControls from "./components/AuthControls";
@@ -42,12 +42,6 @@ if (isAuthEnabled) {
 // 4xx / 5xx を一元的に処理（ログ出力とユーザー向けメッセージの付与）
 setupHttpInterceptors(axios);
 
-// 準備中のページ（タイトルのみ設定する）
-function PlaceholderPage({ title }: { title: string }) {
-  usePageTitle(title);
-  return <div>{title}（準備中）</div>;
-}
-
 // ルーティング部分（画面遷移時にエラー表示をリセットし、先頭へのスクロールと見出しへのフォーカスを行う）
 function AppRoutes() {
   const location = useLocation();
@@ -60,10 +54,10 @@ function AppRoutes() {
         <Route path="/lesson/:lessonId" element={<LessonDetail />} />
         <Route path="/progress" element={<ProgressHistory />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
-        {/* 体裁用のダミーページ（必要に応じて中身を実装） */}
-        <Route path="/terms" element={<PlaceholderPage title="利用規約" />} />
-        <Route path="/privacy" element={<PlaceholderPage title="プライバシーポリシー" />} />
-        <Route path="/contact" element={<PlaceholderPage title="お問い合わせ" />} />
+        {/* 規約・ポリシー・お問い合わせ */}
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/contact" element={<Contact />} />
         {/* 該当するページが無い URL */}
         <Route path="*" element={<NotFound />} />
       </Routes>

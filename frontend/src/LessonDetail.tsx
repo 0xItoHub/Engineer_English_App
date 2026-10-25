@@ -28,7 +28,12 @@ import {
   VolumeUp as VolumeUpIcon,
   StopCircle as StopCircleIcon,
   ArrowForward as ArrowForwardIcon,
-  TrendingUp as TrendingUpIcon
+  TrendingUp as TrendingUpIcon,
+  MenuBook as MenuBookIcon,
+  Flag as FlagIcon,
+  AutoStories as AutoStoriesIcon,
+  Forum as ForumIcon,
+  EmojiEvents as EmojiEventsIcon
 } from "@mui/icons-material";
 import { parseId } from "./lib/params";
 import { isNotFoundError, queryView } from "./lib/queryState";
@@ -344,7 +349,7 @@ const LessonContent: React.FC<{ lessonId: string | undefined }> = ({ lessonId })
     variant: "h6",
     component: "h2",
     gutterBottom: true,
-    sx: { outline: "none" },
+    sx: { outline: "none", display: "flex", alignItems: "center", gap: 1 },
   } as const;
 
   return (
@@ -356,8 +361,9 @@ const LessonContent: React.FC<{ lessonId: string | undefined }> = ({ lessonId })
           シーンに戻る
         </Button>
         <Paper elevation={0} sx={{ p: 3, backgroundColor: "#f5f5f5" }}>
-          <Typography variant="h4" component="h1" gutterBottom>
-            <span aria-hidden="true">📚</span> {lesson.title}
+          <Typography variant="h4" component="h1" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <MenuBookIcon color="primary" fontSize="large" aria-hidden="true" />
+            {lesson.title}
           </Typography>
           {/* タイトルを繰り返すだけの説明の代わりに、レッスンの進め方を案内する */}
           <Typography variant="body1" color="text.secondary">
@@ -400,7 +406,8 @@ const LessonContent: React.FC<{ lessonId: string | undefined }> = ({ lessonId })
           {currentStep === 0 && (
             <Box>
               <Typography {...stepHeadingProps}>
-                <span aria-hidden="true">🎯</span> レッスン概要
+                <FlagIcon color="primary" aria-hidden="true" />
+                レッスン概要
               </Typography>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -417,7 +424,7 @@ const LessonContent: React.FC<{ lessonId: string | undefined }> = ({ lessonId })
 
           {currentStep === 1 && (
             <Box>
-              <Typography {...stepHeadingProps}><span aria-hidden="true">📖</span> フレーズ学習</Typography>
+              <Typography {...stepHeadingProps}><AutoStoriesIcon color="primary" aria-hidden="true" />フレーズ学習</Typography>
               {lesson.lesson_phrases && lesson.lesson_phrases.length > 0 && speechRateControl}
               {lesson.lesson_phrases && lesson.lesson_phrases.length > 0 ? (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -446,7 +453,7 @@ const LessonContent: React.FC<{ lessonId: string | undefined }> = ({ lessonId })
 
           {currentStep === 2 && (
             <Box>
-              <Typography {...stepHeadingProps}><span aria-hidden="true">💬</span> 対話練習</Typography>
+              <Typography {...stepHeadingProps}><ForumIcon color="primary" aria-hidden="true" />対話練習</Typography>
               {lesson.lesson_dialogues && lesson.lesson_dialogues.length > 0 && speechRateControl}
               {lesson.lesson_dialogues && lesson.lesson_dialogues.length > 0 ? (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -496,7 +503,7 @@ const LessonContent: React.FC<{ lessonId: string | undefined }> = ({ lessonId })
 
           {currentStep === 3 && (
             <Box>
-              <Typography {...stepHeadingProps}><span aria-hidden="true">🎉</span> まとめ</Typography>
+              <Typography {...stepHeadingProps}><EmojiEventsIcon color="primary" aria-hidden="true" />まとめ</Typography>
               <Typography variant="body1" sx={{ mb: 2 }}>
                 {finished
                   ? "このレッスンで学んだ表現です。読み上げを聞いて、いつでも振り返れます。"

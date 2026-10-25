@@ -67,7 +67,7 @@ const TechStack: React.FC = () => (
         >
           <GitHubIcon fontSize="small" aria-hidden="true" />
           ソースコード（GitHub）
-          <Box component="span" sx={{ fontSize: "0.75rem", color: "text.secondary" }}>
+          <Box component="span" sx={{ fontSize: "0.8125rem", color: "text.secondary" }}>
             （新しいタブで開きます）
           </Box>
         </Link>

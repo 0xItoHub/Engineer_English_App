@@ -165,8 +165,8 @@ const ScenesList: React.FC = () => {
                         {/* 進捗バー */}
                         <Box sx={{ mt: 1, mb: 2 }}>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                            <Typography variant="caption" color="text.secondary">進捗</Typography>
-                            <Typography variant="caption" color="text.secondary">{percent}% ({done}/{total})</Typography>
+                            <Typography variant="body2" color="text.secondary">進捗</Typography>
+                            <Typography variant="body2" color="text.secondary">{percent}% ({done}/{total})</Typography>
                           </Box>
                           <LinearProgress
                             variant="determinate"

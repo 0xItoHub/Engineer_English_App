@@ -13,10 +13,10 @@ const SiteFooter: React.FC = () => {
           spacing={2}
           sx={{ justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' } }}
         >
-          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-            Engineer English Inc.
+          <Typography variant="subtitle1" component="p" sx={{ fontWeight: 600 }}>
+            Engineer English App（個人開発）
           </Typography>
-          <Stack component="nav" aria-label="フッターナビゲーション" direction="row" spacing={3}>
+          <Stack component="nav" aria-label="フッターナビゲーション" direction="row" sx={{ flexWrap: 'wrap', columnGap: 3, rowGap: 1 }}>
             <MuiLink component={RouterLink} to="/terms" underline="hover" color="inherit">
               利用規約
             </MuiLink>
@@ -29,8 +29,8 @@ const SiteFooter: React.FC = () => {
           </Stack>
         </Stack>
         <Divider sx={{ my: 2 }} />
-        <Typography variant="caption" color="text.secondary">
-          © {year} Engineer English Inc. All rights reserved.
+        <Typography variant="body2" color="text.secondary" sx={{ fontSize: 13 }}>
+          © {year} Engineer English App
         </Typography>
       </Container>
     </Box>

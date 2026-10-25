@@ -58,6 +58,42 @@ test('存在しない URL では「ページが見つかりませんでした」
   }
 });
 
+test.each([
+  ['/privacy', 'プライバシーポリシー'],
+  ['/terms', '利用規約'],
+  ['/contact', 'お問い合わせ'],
+])('%s では「%s」のページを表示する', async (path, title) => {
+  window.history.pushState(null, '', path);
+  try {
+    renderWithClient(<App />);
+
+    expect(await screen.findByRole('heading', { level: 1, name: title })).toBeInTheDocument();
+    expect(document.title).toBe(`${title} | Engineer English App`);
+    // フッターには個人開発のサービスであることを表示する
+    expect(screen.getByText('Engineer English App（個人開発）')).toBeInTheDocument();
+  } finally {
+    window.history.pushState(null, '', '/');
+  }
+});
+
+test('プライバシーポリシーには取得する情報・保存先・削除の依頼先・最終更新日を記載する', async () => {
+  window.history.pushState(null, '', '/privacy');
+  try {
+    renderWithClient(<App />);
+
+    await screen.findByRole('heading', { level: 1, name: 'プライバシーポリシー' });
+    expect(screen.getByText(/Amazon Cognito/)).toBeInTheDocument();
+    expect(screen.getByText(/東京リージョン/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /GitHub リポジトリの Issues/ })).toHaveAttribute(
+      'href',
+      'https://github.com/0xItoHub/Engineer_English_App/issues'
+    );
+    expect(screen.getByText('最終更新日: 2026年10月25日')).toBeInTheDocument();
+  } finally {
+    window.history.pushState(null, '', '/');
+  }
+});
+
 test('API は資格情報（Cookie）なしで呼び出す設定になっている', () => {
   expect(axios.defaults.withCredentials).toBe(false);
 });
