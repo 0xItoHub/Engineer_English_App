@@ -40,7 +40,7 @@ import { isNotFoundError, queryView } from "./lib/queryState";
 import { usePageTitle } from "./hooks/usePageTitle";
 import NotFound from "./components/NotFound";
 import { LoadingView, QueryErrorAlert } from "./components/QueryStatus";
-import { pushLocalProgress, readSpeechRate, removeLocalProgressEntry, writeSpeechRate } from "./lib/storage";
+import { pushLocalProgress, readSpeechRate, removeLocalProgressEntry, writeLastLesson, writeSpeechRate } from "./lib/storage";
 import { visuallyHidden } from "./lib/a11y";
 import { useAppAuth } from "./lib/auth";
 import { pickEnglishVoice, utteranceLang } from "./lib/tts";
@@ -312,6 +312,14 @@ const LessonContent: React.FC<{ lessonId: string | undefined }> = ({ lessonId })
   const saving = completeLesson.isPending;
   const view = queryView(lessonQuery);
   usePageTitle(lesson?.title);
+
+  // ホームの「続きから」に表示するため、開いたレッスンをブラウザに記憶する
+  const lessonIdForResume = lesson?.id;
+  const sceneIdForResume = lesson?.scene;
+  useEffect(() => {
+    if (lessonIdForResume === undefined || sceneIdForResume === undefined) return;
+    writeLastLesson({ lesson: lessonIdForResume, scene: sceneIdForResume });
+  }, [lessonIdForResume, sceneIdForResume]);
 
   if (lessonNumber === null || (view === "error" && isNotFoundError(lessonQuery.error))) {
     return <NotFound />;

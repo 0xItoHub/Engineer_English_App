@@ -171,3 +171,22 @@ export function readSpeechRate(allowed: readonly number[], fallback: number): nu
 export function writeSpeechRate(rate: number): boolean {
   return writeJSON(SPEECH_RATE_KEY, rate);
 }
+
+// ---- 最後に開いたレッスン（ホームの「続きから」に使う） ----
+
+export const LAST_LESSON_KEY = "ee_last_lesson";
+
+export type LastLesson = { lesson: number; scene: number };
+
+const isPositiveInteger = (v: unknown): v is number => typeof v === "number" && Number.isSafeInteger(v) && v > 0;
+
+export function readLastLesson(): LastLesson | null {
+  const value = readJSON<Partial<LastLesson> | null>(LAST_LESSON_KEY, null);
+  if (!value || typeof value !== "object") return null;
+  return isPositiveInteger(value.lesson) && isPositiveInteger(value.scene) ? { lesson: value.lesson, scene: value.scene } : null;
+}
+
+export function writeLastLesson(value: LastLesson): boolean {
+  if (!isPositiveInteger(value.lesson) || !isPositiveInteger(value.scene)) return false;
+  return writeJSON(LAST_LESSON_KEY, { lesson: value.lesson, scene: value.scene });
+}

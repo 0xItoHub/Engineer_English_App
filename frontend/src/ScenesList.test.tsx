@@ -3,7 +3,7 @@ import { act, fireEvent, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import axios from 'axios';
 import ScenesList from './ScenesList';
-import { LOCAL_PROGRESS_KEY, pushLocalProgress } from './lib/storage';
+import { LAST_LESSON_KEY, LOCAL_PROGRESS_KEY, pushLocalProgress } from './lib/storage';
 import { renderWithClient } from './test/renderWithClient';
 import { onlineManager } from '@tanstack/react-query';
 
@@ -169,4 +169,23 @@ test('オフラインの場合は接続を確認する案内を表示する', as
   } finally {
     onlineManager.setOnline(true);
   }
+});
+
+test('最後に開いたレッスンを「続きから」として表示し、一覧に無いレッスンの記録は表示しない', async () => {
+  mockedAxios.get.mockImplementation((url: string) =>
+    url.endsWith('/api/scenes/') ? Promise.resolve({ data: scenes }) : Promise.reject(new Error('403'))
+  );
+  window.localStorage.setItem(LAST_LESSON_KEY, JSON.stringify({ lesson: 11, scene: 1 }));
+
+  const { unmount } = renderScenesList();
+
+  const section = await screen.findByRole('region', { name: '続きから' });
+  expect(within(section).getByText('L2')).toBeInTheDocument();
+  expect(within(section).getByRole('link', { name: 'L2 を続きから学習する' })).toHaveAttribute('href', '/lesson/11');
+  unmount();
+
+  window.localStorage.setItem(LAST_LESSON_KEY, JSON.stringify({ lesson: 99, scene: 1 }));
+  renderScenesList();
+  await screen.findByText('Daily Standup');
+  expect(screen.queryByRole('region', { name: '続きから' })).not.toBeInTheDocument();
 });

@@ -3,7 +3,7 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router';
 import axios from 'axios';
 import LessonDetail from './LessonDetail';
-import { LOCAL_PROGRESS_KEY, SPEECH_RATE_KEY } from './lib/storage';
+import { LAST_LESSON_KEY, LOCAL_PROGRESS_KEY, SPEECH_RATE_KEY } from './lib/storage';
 import { renderWithClient } from './test/renderWithClient';
 
 vi.mock('axios');
@@ -48,6 +48,8 @@ test('レッスン概要を表示し、ステップを進めてフレーズ・�
 
   expect(await screen.findByRole('heading', { level: 1, name: /Daily report/ })).toBeInTheDocument();
   expect(screen.getByText('日報で使う表現')).toBeInTheDocument();
+  // ホームの「続きから」に使うため、開いたレッスンを記憶する
+  expect(JSON.parse(window.localStorage.getItem(LAST_LESSON_KEY) || 'null')).toEqual({ lesson: 5, scene: 1 });
   expect(screen.getByText('フレーズ: 1個')).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole('button', { name: '次へ' }));

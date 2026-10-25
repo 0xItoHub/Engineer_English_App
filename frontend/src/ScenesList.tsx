@@ -21,6 +21,7 @@ import AnimatedCodeBackground from "./components/AnimatedCodeBackground";
 import HomeHero from "./components/HomeHero";
 import ContentStats from "./components/ContentStats";
 import TechStack from "./components/TechStack";
+import ContinueLearning from "./components/ContinueLearning";
 import { countContent, useScenesQuery, type Scene } from "./lib/queries";
 import { queryView } from "./lib/queryState";
 import { useLearningProgress } from "./hooks/useLearningProgress";
@@ -83,6 +84,9 @@ const ScenesList: React.FC = () => {
       <Box sx={{ position: 'relative', zIndex: 1 }}>
         {/* アプリの概要と学習開始への導線（スマートフォンでも最初に表示する） */}
         <HomeHero targetId={SCENE_LIST_ID} />
+
+        {/* 最後に開いたレッスンへの導線 */}
+        {scenes.length > 0 && <ContinueLearning scenes={scenes} />}
 
         {/* キャッチコピーとイメージ画像 */}
         <Paper elevation={0} sx={{ p: { xs: 2, sm: 3 }, mb: 4, backgroundColor: "#f5f5f5", opacity: 0.98 }}>
