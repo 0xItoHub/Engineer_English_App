@@ -25,6 +25,7 @@ import {
   AccessTime as AccessTimeIcon
 } from "@mui/icons-material";
 import { readLocalProgress } from "./lib/storage";
+import { useAppAuth } from "./lib/auth";
 import { useMyProgressQuery, useScenesQuery, type Scene, type ServerProgress } from "./lib/queries";
 
 type Progress = {
@@ -64,6 +65,7 @@ const toProgress = (p: ServerProgress): Progress => ({
 const ProgressHistory: React.FC = () => {
   const navigate = useNavigate();
   const progressQuery = useMyProgressQuery();
+  const { isAuthenticated } = useAppAuth();
   // シーン一覧はホーム画面と共有し、ローカル進捗のタイトル補完に使う
   const scenesQuery = useScenesQuery();
   const loading = progressQuery.isPending || scenesQuery.isPending;
@@ -73,8 +75,8 @@ const ProgressHistory: React.FC = () => {
     // サーバダウン時はシーン一覧が空となり、タイトルはフォールバック表示になる
     const lessonMap = buildLessonMap(scenesQuery.data ?? []);
 
-    // ローカル分をタイトル補完してProgress形式へ
-    const localAsProgress: Progress[] = readLocal().map((x) => {
+    // ローカル分をタイトル補完してProgress形式へ（ログイン中はアカウントに保存された進捗のみを表示する）
+    const localAsProgress: Progress[] = (isAuthenticated ? [] : readLocal()).map((x) => {
       const info = lessonMap.get(x.lesson);
       return {
         lesson: x.lesson,
@@ -87,7 +89,7 @@ const ProgressHistory: React.FC = () => {
     });
 
     return [...server, ...localAsProgress];
-  }, [progressQuery.data, scenesQuery.data]);
+  }, [progressQuery.data, scenesQuery.data, isAuthenticated]);
 
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);

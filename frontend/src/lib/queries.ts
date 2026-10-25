@@ -2,7 +2,8 @@
 // - 共通の axios インスタンス（インターセプター付き）を使うため、エラーには userMessage が付与される
 // - クエリの signal を axios に渡し、画面遷移時などに不要になったリクエストを中断する
 import axios from "axios";
-import { QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { QueryClient, useMutation, useQuery, useQueryClient, type Query } from "@tanstack/react-query";
+import { useAppAuth } from "./auth";
 import { API_BASE_URL } from "./config";
 import { isAbortError, type ApiError } from "./http";
 import type { LocalProgressEntry } from "./storage";
@@ -61,8 +62,18 @@ export const queryKeys = {
   scenes: ["scenes"] as const,
   scene: (id: number) => ["scenes", id] as const,
   lesson: (id: number) => ["lessons", id] as const,
-  myProgress: ["progress", "mine"] as const,
+  // 学習進捗はユーザーごとにキャッシュを分ける（未ログイン時は "anonymous"）
+  myProgressAll: ["progress", "mine"] as const,
+  myProgress: (sub: string | null) => ["progress", "mine", sub ?? ANONYMOUS_KEY] as const,
 };
+
+const ANONYMOUS_KEY = "anonymous";
+
+// ログイン中のユーザーに紐づくキャッシュ（ログアウト時に削除する）
+export function isUserScopedQuery(query: Pick<Query, "queryKey">): boolean {
+  const key = query.queryKey;
+  return key[0] === "progress" && key[1] === "mine" && key[2] !== ANONYMOUS_KEY;
+}
 
 // 教材データ（シーン・レッスン）は更新頻度が低いため、一定時間はキャッシュを再利用する
 const CONTENT_STALE_TIME = 5 * 60 * 1000;
@@ -166,10 +177,14 @@ export function useLessonQuery(id: number | undefined) {
 const PROGRESS_STALE_TIME = 30 * 1000;
 
 export function useMyProgressQuery() {
+  const auth = useAppAuth();
+  const sub = auth.isAuthenticated ? auth.sub : null;
   return useQuery({
-    queryKey: queryKeys.myProgress,
+    queryKey: queryKeys.myProgress(sub),
     queryFn: ({ signal }) => fetchMyProgress(signal),
     staleTime: PROGRESS_STALE_TIME,
+    // ログイン状態の確認が終わるまでは取得しない（取得先のユーザーを確定させる）
+    enabled: !auth.isLoading,
   });
 }
 
@@ -178,7 +193,7 @@ export function useCompleteLessonMutation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: postCompleteLesson,
-    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.myProgress }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.myProgressAll }),
   });
 }
 

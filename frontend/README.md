@@ -10,7 +10,8 @@
 - MUI 9（`@mui/material` / `@mui/icons-material`）
 - TanStack Query 5（API レスポンスのキャッシュ・画面間での共有）
 - React Router 8（`react-router`）
-- axios（インターセプターでエラーを一元処理）
+- axios（インターセプターでエラーを一元処理・API 宛てのみアクセストークンを付与）
+- oidc-client-ts / react-oidc-context（Amazon Cognito によるログイン。認可コード + PKCE）
 - Vitest + React Testing Library（jsdom）
 - ESLint（フラット設定 `eslint.config.js`、typescript-eslint / react-hooks / react-refresh）
 
@@ -37,6 +38,13 @@ Vite の仕様により、`VITE_` で始まる変数がビルド時に埋め込�
 | 変数 | 内容 | 既定値 |
 |---|---|---|
 | `VITE_API_BASE_URL` | API のベース URL（任意。別オリジンの API を呼び出す場合のみ指定） | 空（同一オリジンの `/api/...` を呼び出す） |
+| `VITE_COGNITO_AUTHORITY` | Cognito ユーザープールの OIDC 発行者 URL（`https://cognito-idp.<region>.amazonaws.com/<userPoolId>`） | 空（ログイン機能なし） |
+| `VITE_COGNITO_CLIENT_ID` | Cognito アプリクライアント ID（クライアントシークレットなしのパブリッククライアント） | 空（ログイン機能なし） |
+| `VITE_COGNITO_DOMAIN` | マネージドログインのドメイン（`https://<prefix>.auth.<region>.amazoncognito.com`。ログアウトに使用） | 空（ログイン機能なし） |
+
+Cognito の 3 つの変数がすべてそろった場合のみ、ヘッダーにログインボタンを表示します。
+いずれかが未設定の場合はログイン機能を表示せず、これまでどおり匿名で利用できます（学習進捗はブラウザに保存）。
+GitHub Actions のデプロイでは、リポジトリ変数 `COGNITO_AUTHORITY` / `COGNITO_CLIENT_ID` / `COGNITO_DOMAIN` からビルド時に設定します。
 
 本番環境・ローカル開発ともに、通常は未設定のままで利用します。
 
@@ -48,6 +56,25 @@ Vite の仕様により、`VITE_` で始まる変数がビルド時に埋め込�
 ```bash
 VITE_API_BASE_URL=http://localhost:8000
 ```
+
+## ログイン（Amazon Cognito）
+
+Cognito のマネージドログイン画面を利用し、OAuth 2.0 認可コードフロー + PKCE でログインします（スコープ: `openid email profile`）。
+
+1. ヘッダーの「ログイン」から Cognito のログイン画面へ移動します（現在の画面を戻り先として保存）。
+2. ログイン後は `/auth/callback` に戻り、トークンを取得してから元の画面へ移動します。戻り先は同一オリジン内のパス（`/` で始まり `//` で始まらないもの）のみ受け付けます。
+3. ログイン中は、自サービスの API（同一オリジンの `/api/...`、または `VITE_API_BASE_URL` のオリジン）宛てのリクエストにのみ `Authorization: Bearer <アクセストークン>` を付与します。
+4. API が 401 を返した場合は、リフレッシュトークンでトークンを 1 回更新して再送します。それでも 401 の場合はログアウト状態に戻し、再ログインを案内します。
+5. 「ログアウト」でブラウザのログイン情報を削除し、Cognito のログアウトエンドポイント（`/logout?client_id=...&logout_uri=<オリジン>/`）を経由してトップページへ戻ります。
+
+Cognito のアプリクライアントには、コールバック URL `https://<配信ドメイン>/auth/callback` とサインアウト URL `https://<配信ドメイン>/` を登録します。
+
+- トークンは sessionStorage に保存します（タブを閉じると破棄。localStorage には保存しません）。
+- ログイン中の学習履歴・シーンの完了状況は、アカウントに保存された進捗（`/api/progress/my_progress/`）を表示します。進捗のキャッシュはユーザーごとに分け、ログアウト時に削除します。
+- ログイン直後（タブごとに 1 回）、ブラウザに保存されていた進捗をアカウントへ反映します。API のレート制限に合わせて 1 回あたり最大 30 件を順番に送信し、429 を受け取った場合は残りを次回に持ち越します。反映できた進捗はブラウザから削除します。
+- ログイン中にレッスンを完了した場合も、まずブラウザに保存してからアカウントへ送信し、保存できた時点でブラウザの記録を削除します。
+
+ローカルでログインを試す場合は、`frontend/.env.local`（Git 管理対象外）に 3 つの変数を設定し、アプリクライアントに `http://localhost:3000/auth/callback` と `http://localhost:3000/` を登録します。
 
 ## npm スクリプト
 
@@ -72,9 +99,9 @@ src/
 ├─ SceneDetail.tsx         # シーン詳細（レッスン一覧）
 ├─ LessonDetail.tsx        # レッスン（フレーズ・対話・読み上げ）
 ├─ ProgressHistory.tsx     # 学習履歴
-├─ components/             # 背景アニメーション・ホーム画面の各セクション・チャット・フッター・ErrorBoundary
+├─ components/             # 背景アニメーション・ホーム画面の各セクション・チャット・フッター・ErrorBoundary・ログイン関連
 ├─ hooks/                  # チャットクライアント・prefers-reduced-motion
-├─ lib/                    # API 接続先の設定・データ取得（queries.ts）・HTTP エラー処理・localStorage ヘルパー
+├─ lib/                    # API 接続先の設定・データ取得（queries.ts）・HTTP エラー処理・localStorage ヘルパー・ログイン（auth.ts / authHttp.ts / progressSync.ts）
 └─ test/                   # テスト用の描画ヘルパー（QueryClientProvider 付き）
 ```
 
@@ -87,6 +114,7 @@ API の取得処理は TanStack Query で管理し、クエリキーとクエリ
 - 取得に失敗した場合は 1 回だけ再試行します（4xx は再試行しません）。
 - 画面遷移などで不要になったリクエストは、クエリの `signal` により中断されます。
 - レッスン完了時は、進捗をブラウザに保存したうえでサーバに送信します（`useMutation`）。
+- 学習進捗のクエリキーにはログイン中のユーザー（未ログイン時は `anonymous`）を含め、ユーザー間でキャッシュが混ざらないようにしています。
 
 ## エラーハンドリングとアクセシビリティ
 
