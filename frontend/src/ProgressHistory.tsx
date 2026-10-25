@@ -14,13 +14,13 @@ import {
   TableCell,
   TableContainer,
   TableHead,
-  TableRow,
-  LinearProgress
+  TableRow
 } from "@mui/material";
 import { 
   ArrowBack as ArrowBackIcon,
   School as SchoolIcon,
-  TrendingUp as TrendingUpIcon,
+  CollectionsBookmark as CollectionsBookmarkIcon,
+  CheckCircle as CheckCircleIcon,
   AccessTime as AccessTimeIcon
 } from "@mui/icons-material";
 import { useScenesQuery, type ProgressItem, type Scene } from "./lib/queries";
@@ -39,6 +39,9 @@ type Progress = {
   local: boolean;
 };
 
+// シーン名を補完できなかったブラウザの記録の表示
+const UNSYNCED_SCENE = "(未同期)";
+
 const buildLessonMap = (scenes: Scene[]): Map<number, { lesson_title: string; scene_title: string }> => {
   const map = new Map<number, { lesson_title: string; scene_title: string }>();
   for (const s of scenes || []) {
@@ -56,7 +59,7 @@ const toProgress = (p: ProgressItem, lessonMap: Map<number, { lesson_title: stri
     id: p.id,
     lesson: p.lesson,
     lesson_title: p.lesson_title || info?.lesson_title || `Lesson #${p.lesson}`,
-    scene_title: p.scene_title || info?.scene_title || (p.local ? "(未同期)" : ""),
+    scene_title: p.scene_title || info?.scene_title || (p.local ? UNSYNCED_SCENE : ""),
     completed_at: p.completed_at,
     time_spent: p.time_spent,
     local: p.local,
@@ -95,10 +98,8 @@ const ProgressHistory: React.FC = () => {
     });
   };
 
-  const getTotalScore = () => {
-    if (progress.length === 0) return 0;
-    return 100;
-  };
+  // 1 つ以上のレッスンを完了したシーンの数
+  const getStudiedSceneCount = () => new Set(progress.map((p) => p.scene_title).filter((t) => t && t !== UNSYNCED_SCENE)).size;
 
   const getTotalTime = () => progress.reduce((sum, p) => sum + p.time_spent, 0);
 
@@ -145,9 +146,9 @@ const ProgressHistory: React.FC = () => {
               <Box sx={{ flex: '1 1 300px', minWidth: '250px' }}>
                 <Card elevation={2}>
                   <CardContent sx={{ textAlign: 'center' }}>
-                    <TrendingUpIcon sx={{ fontSize: 40, color: 'success.main', mb: 1 }} />
-                    <Typography variant="h4" color="success.main">{getTotalScore()}%</Typography>
-                    <Typography variant="body2" color="text.secondary">平均スコア</Typography>
+                    <CollectionsBookmarkIcon sx={{ fontSize: 40, color: 'success.main', mb: 1 }} />
+                    <Typography variant="h4" color="success.main">{getStudiedSceneCount()}</Typography>
+                    <Typography variant="body2" color="text.secondary">学習したシーン数</Typography>
                   </CardContent>
                 </Card>
               </Box>
@@ -187,7 +188,7 @@ const ProgressHistory: React.FC = () => {
                         <TableCell>レッスン</TableCell>
                         <TableCell>シーン</TableCell>
                         <TableCell>完了日時</TableCell>
-                        <TableCell>スコア</TableCell>
+                        <TableCell>状態</TableCell>
                         <TableCell>学習時間</TableCell>
                       </TableRow>
                     </TableHead>
@@ -195,18 +196,10 @@ const ProgressHistory: React.FC = () => {
                       {progress.map((item) => (
                         <TableRow key={item.id ?? `local-${item.lesson}`}>
                           <TableCell><Typography variant="body1" sx={{ fontWeight: 'bold' }}>{item.lesson_title}</Typography></TableCell>
-                          <TableCell><Chip label={item.scene_title} size="small" color="primary" /></TableCell>
+                          <TableCell><Chip label={item.scene_title || "—"} size="small" color="primary" /></TableCell>
                           <TableCell><Typography variant="body2" color="text.secondary">{formatDate(item.completed_at)}</Typography></TableCell>
                           <TableCell>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <Typography variant="body2">100%</Typography>
-                              <LinearProgress
-                                variant="determinate"
-                                value={100}
-                                aria-label={`${item.lesson_title} のスコア`}
-                                sx={{ width: 60, height: 6, borderRadius: 3 }}
-                              />
-                            </Box>
+                            <Chip size="small" color="success" variant="outlined" icon={<CheckCircleIcon />} label="完了" />
                           </TableCell>
                           <TableCell><Typography variant="body2" color="text.secondary">{formatTime(item.time_spent)}</Typography></TableCell>
                         </TableRow>

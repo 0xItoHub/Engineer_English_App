@@ -35,7 +35,7 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 
-test('シーンのレッスン一覧とスコアを表示する', async () => {
+test('シーンのレッスン一覧と、レッスンごとの完了状況を表示する', async () => {
   mockedAxios.get.mockImplementation((url: string) => {
     if (url.endsWith('/api/scenes/1/')) return Promise.resolve({ data: scene });
     return Promise.reject(new Error('403'));
@@ -47,8 +47,11 @@ test('シーンのレッスン一覧とスコアを表示する', async () => {
   expect(await screen.findByRole('heading', { level: 1, name: /Daily Standup/ })).toBeInTheDocument();
   expect(screen.getByText('レッスン (2)')).toBeInTheDocument();
   expect(screen.getByText('Yesterday I worked on...')).toBeInTheDocument();
-  expect(screen.getByText('完了')).toBeInTheDocument();
-  expect(screen.getByRole('progressbar', { name: 'Yesterday I worked on... のスコア' })).toHaveAttribute('aria-valuenow', '100');
+  expect(screen.getByLabelText('Yesterday I worked on...: 完了')).toHaveTextContent('完了');
+  expect(screen.getByLabelText('Blockers: 未学習')).toHaveTextContent('未学習');
+  // スコア（％）は表示しない
+  expect(screen.queryByText(/%/)).not.toBeInTheDocument();
+  expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
 });
 
 test('「開始」でレッスン画面へ遷移する', async () => {

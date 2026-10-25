@@ -4,7 +4,6 @@ import {
   Card,
   CardContent,
   Typography,
-  CircularProgress,
   Box,
   Chip,
   Button,
@@ -18,7 +17,8 @@ import {
 import { 
   PlayArrow as PlayIcon,
   ArrowBack as ArrowBackIcon,
-  School as SchoolIcon
+  School as SchoolIcon,
+  CheckCircle as CheckCircleIcon
 } from "@mui/icons-material";
 import { useSceneQuery } from "./lib/queries";
 import { parseId } from "./lib/params";
@@ -53,10 +53,7 @@ const SceneDetail: React.FC = () => {
     navigate(`/lesson/${lessonId}`);
   };
 
-  const getLessonScore = (lessonId: number) => {
-    const hit = progress.find((p) => p.lesson === lessonId);
-    return hit ? 100 : 0;
-  };
+  const completedLessonIds = new Set(progress.map((p) => p.lesson));
 
   if (sceneId === null || (view === "error" && isNotFoundError(sceneQuery.error))) {
     return <NotFound />;
@@ -117,7 +114,7 @@ const SceneDetail: React.FC = () => {
               <>
                 <List aria-label="レッスン一覧">
                   {paginated.map((lesson) => {
-                    const score = getLessonScore(lesson.id);
+                    const completed = completedLessonIds.has(lesson.id);
                     return (
                       <ListItem key={lesson.id} divider secondaryAction={
                         <Button
@@ -136,38 +133,17 @@ const SceneDetail: React.FC = () => {
                           slotProps={{ secondary: { component: 'div' } }}
                           secondary={
                             <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 2 }}>
-                              <Box sx={{ position: 'relative', display: 'inline-flex' }}>
-                                {/* 背景トラック（薄い円） */}
-                                <CircularProgress
-                                  variant="determinate"
-                                  value={100}
-                                  size={42}
-                                  thickness={4}
-                                  aria-hidden="true"
-                                  sx={{
-                                    color: (theme) => theme.palette.divider,
-                                    position: 'absolute',
-                                    left: 0,
-                                    top: 0,
-                                  }}
-                                />
-                                <CircularProgress
-                                  variant="determinate"
-                                  value={score}
-                                  size={42}
-                                  thickness={4}
-                                  aria-label={`${lesson.title} のスコア`}
-                                />
-                                <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                  <Typography variant="caption" color="text.secondary">{`${score}%`}</Typography>
-                                </Box>
-                              </Box>
+                              {/* 学習状況（レッスンを最後まで進めると「完了」） */}
+                              {completed ? (
+                                <Chip size="small" color="success" icon={<CheckCircleIcon />} label="完了" aria-label={`${lesson.title}: 完了`} />
+                              ) : (
+                                <Chip size="small" variant="outlined" label="未学習" aria-label={`${lesson.title}: 未学習`} />
+                              )}
                               {lesson.description && (
                                 <Typography variant="caption" color="text.secondary">
                                   {lesson.description}
                                 </Typography>
                               )}
-                              {score >= 100 && (<Chip size="small" color="success" label="完了" />)}
                             </Box>
                           }
                         />
