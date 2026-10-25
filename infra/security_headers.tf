@@ -4,7 +4,6 @@
 locals {
   cognito_idp_origin    = "https://cognito-idp.${var.aws_region}.amazonaws.com"
   cognito_domain_origin = "https://${aws_cognito_user_pool_domain.main.domain}.auth.${var.aws_region}.amazoncognito.com"
-  api_gateway_origin    = aws_apigatewayv2_api.http_api.api_endpoint
 
   # CSP の各ディレクティブ（同一オリジンを基本とし、外部は利用中のサービスのみ許可する）
   csp_directives = compact([
@@ -18,8 +17,8 @@ locals {
     "font-src 'self' https://fonts.gstatic.com",
     # 画像は /images 配下などの同一オリジンと、data: URI（インライン画像）のみ
     "img-src 'self' data:",
-    # API（同一オリジンの /api と API Gateway）と、Cognito の OIDC 設定・JWKS（cognito-idp）・トークン発行（ドメイン）
-    "connect-src 'self' ${local.api_gateway_origin} ${local.cognito_idp_origin} ${local.cognito_domain_origin}",
+    # API（同一オリジンの /api）と、Cognito の OIDC 設定・JWKS（cognito-idp）・トークン発行（ドメイン）
+    "connect-src 'self' ${local.cognito_idp_origin} ${local.cognito_domain_origin}",
     # 他サイトの iframe への埋め込みを禁止する
     "frame-ancestors 'none'",
     # <base> タグによる相対 URL の書き換えを同一オリジンに限定する
