@@ -24,6 +24,7 @@ import { useSceneQuery } from "./lib/queries";
 import { parseId } from "./lib/params";
 import { isNotFoundError, queryView } from "./lib/queryState";
 import { useLearningProgress } from "./hooks/useLearningProgress";
+import { usePageTitle } from "./hooks/usePageTitle";
 import NotFound from "./components/NotFound";
 import { LoadingView, ProgressErrorAlert, QueryErrorAlert } from "./components/QueryStatus";
 
@@ -41,6 +42,7 @@ const SceneDetail: React.FC = () => {
   const scene = sceneQuery.data ?? null;
   // 表示できるデータが無いときだけエラーを表示する（キャッシュがあれば再取得の失敗時もそのまま表示）
   const view = queryView(sceneQuery);
+  usePageTitle(scene?.title);
 
   // レッスン数が変わった場合、現在ページが範囲外なら1に戻す
   useEffect(() => {

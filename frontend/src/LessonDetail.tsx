@@ -30,6 +30,7 @@ import {
 } from "@mui/icons-material";
 import { parseId } from "./lib/params";
 import { isNotFoundError, queryView } from "./lib/queryState";
+import { usePageTitle } from "./hooks/usePageTitle";
 import NotFound from "./components/NotFound";
 import { LoadingView, QueryErrorAlert } from "./components/QueryStatus";
 import { pushLocalProgress, removeLocalProgressEntry } from "./lib/storage";
@@ -281,6 +282,7 @@ const LessonDetail: React.FC = () => {
   const lesson = lessonQuery.data ?? null;
   const saving = completeLesson.isPending;
   const view = queryView(lessonQuery);
+  usePageTitle(lesson?.title);
 
   if (lessonNumber === null || (view === "error" && isNotFoundError(lessonQuery.error))) {
     return <NotFound />;

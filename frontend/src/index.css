@@ -11,3 +11,8 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+/* 画面遷移時にフォーカスを移す見出しは、枠線を表示せずにそのままの見た目にする */
+#main-content h1[tabindex="-1"]:focus {
+  outline: none;
+}

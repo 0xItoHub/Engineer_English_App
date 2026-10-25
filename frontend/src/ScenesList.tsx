@@ -25,6 +25,7 @@ import TechStack from "./components/TechStack";
 import { countContent, useScenesQuery, type Scene } from "./lib/queries";
 import { queryView } from "./lib/queryState";
 import { useLearningProgress } from "./hooks/useLearningProgress";
+import { usePageTitle } from "./hooks/usePageTitle";
 import { LoadingView, ProgressErrorAlert, QueryErrorAlert } from "./components/QueryStatus";
 
 // カルーセル用画像（public/images/ 配下に配置してください）
@@ -50,6 +51,8 @@ const ScenesList: React.FC = () => {
 
   const scenes: Scene[] = scenesQuery.data ?? [];
   const view = queryView(scenesQuery);
+  // ホームはアプリ名のみをタイトルにする
+  usePageTitle(null);
   const loading = view === "loading" || (view === "ready" && progressQuery.isLoading);
 
   const completedLessonIds = new Set(progress.map(p => p.lesson));

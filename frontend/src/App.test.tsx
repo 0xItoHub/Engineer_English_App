@@ -37,8 +37,12 @@ test('存在しない URL では「ページが見つかりませんでした」
     renderWithClient(<App />);
 
     expect(await screen.findByRole('heading', { level: 1, name: 'ページが見つかりませんでした' })).toBeInTheDocument();
+    expect(document.title).toBe('ページが見つかりませんでした | Engineer English App');
     fireEvent.click(screen.getByRole('link', { name: 'ホームへ' }));
     expect(await screen.findByText('Daily Standup')).toBeInTheDocument();
+    expect(document.title).toBe('Engineer English App');
+    // 画面遷移後はページの見出しへフォーカスを移す
+    expect(await screen.findByRole('heading', { level: 1, name: /コードは世界を跨ぐ/ })).toHaveFocus();
   } finally {
     window.history.pushState(null, '', '/');
   }

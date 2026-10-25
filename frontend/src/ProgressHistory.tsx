@@ -26,6 +26,7 @@ import {
 import { useScenesQuery, type ProgressItem, type Scene } from "./lib/queries";
 import { queryView } from "./lib/queryState";
 import { useLearningProgress } from "./hooks/useLearningProgress";
+import { usePageTitle } from "./hooks/usePageTitle";
 import { LoadingView, QueryErrorAlert } from "./components/QueryStatus";
 
 type Progress = {
@@ -72,6 +73,7 @@ const ProgressHistory: React.FC = () => {
   // シーン一覧はホーム画面と共有し、ローカル進捗のタイトル補完に使う
   const scenesQuery = useScenesQuery();
   const view = queryView(progressQuery);
+  usePageTitle("学習履歴");
   // ログイン状態の確認中は、表示するユーザーが確定するまで読み込み中とする
   const loading = authLoading || view === "loading" || scenesQuery.isLoading;
 

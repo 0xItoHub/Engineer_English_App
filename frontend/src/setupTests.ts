@@ -26,6 +26,9 @@ if (typeof window.matchMedia !== 'function') {
   });
 }
 
+// jsdom はスクロールに対応していないため、画面遷移時のスクロールは何もしない関数にする
+Object.defineProperty(window, 'scrollTo', { configurable: true, writable: true, value: () => {} });
+
 beforeEach(() => {
   window.localStorage.clear();
 });

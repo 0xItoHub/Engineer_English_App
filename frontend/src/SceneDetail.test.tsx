@@ -47,6 +47,7 @@ test('シーンのレッスン一覧と、レッスンごとの完了状況を�
   expect(await screen.findByRole('heading', { level: 1, name: /Daily Standup/ })).toBeInTheDocument();
   expect(screen.getByText('レッスン (2)')).toBeInTheDocument();
   expect(screen.getByText('Yesterday I worked on...')).toBeInTheDocument();
+  expect(document.title).toBe('Daily Standup | Engineer English App');
   expect(screen.getByLabelText('Yesterday I worked on...: 完了')).toHaveTextContent('完了');
   expect(screen.getByLabelText('Blockers: 未学習')).toHaveTextContent('未学習');
   // スコア（％）は表示しない
