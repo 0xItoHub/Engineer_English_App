@@ -1,7 +1,10 @@
 # コンテナイメージに不要なファイルを除外
+# （イメージに含めるのは requirements.txt・core/・engineer_english/・lambda.py・manage.py）
 .git
 .gitignore
 .dockerignore
+.github/
+.claude/
 **/__pycache__
 *.pyc
 venv/
@@ -10,5 +13,22 @@ db.sqlite3
 seed_db.sqlite3
 frontend/
 infra/
+**/infra/
 *.md
 .DS_Store
+
+# 環境変数ファイル（ローカルの設定値はイメージに含めない）
+.env*
+
+# テスト・開発用ツールのファイル
+core/tests/
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+**/.pytest_cache/
+.ruff_cache/
+requirements-dev.txt
+pyproject.toml
+.pre-commit-config.yaml
+.editorconfig
