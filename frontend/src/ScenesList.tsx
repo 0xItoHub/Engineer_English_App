@@ -24,6 +24,7 @@ import HomeHero from "./components/HomeHero";
 import ContentStats from "./components/ContentStats";
 import TechStack from "./components/TechStack";
 import { readLocalProgress } from "./lib/storage";
+import { useAppAuth } from "./lib/auth";
 import { countContent, mergeProgress, useMyProgressQuery, useScenesQuery, type Scene } from "./lib/queries";
 
 // カルーセル用画像（public/images/ 配下に配置してください）
@@ -46,10 +47,11 @@ const ScenesList: React.FC = () => {
   const navigate = useNavigate();
   const scenesQuery = useScenesQuery();
   const progressQuery = useMyProgressQuery();
+  const { isAuthenticated } = useAppAuth();
 
-  // サーバが落ちていても、ローカル進捗だけは表示する
+  // サーバが落ちていても、ローカル進捗だけは表示する（ログイン中はアカウントの進捗を表示する）
   const scenes: Scene[] = scenesQuery.data ?? [];
-  const progress = mergeProgress(progressQuery.data ?? [], readLocalProgress());
+  const progress = mergeProgress(progressQuery.data ?? [], isAuthenticated ? [] : readLocalProgress());
   const loading = scenesQuery.isPending || progressQuery.isPending;
 
   const completedLessonIds = new Set(progress.map(p => p.lesson));

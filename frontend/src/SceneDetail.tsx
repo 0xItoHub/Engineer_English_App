@@ -23,6 +23,7 @@ import {
 } from "@mui/icons-material";
 import { getErrorMessage } from "./lib/http";
 import { readLocalProgress } from "./lib/storage";
+import { useAppAuth } from "./lib/auth";
 import { mergeProgress, useMyProgressQuery, useSceneQuery } from "./lib/queries";
 
 const PAGE_SIZE = 5;
@@ -32,11 +33,12 @@ const SceneDetail: React.FC = () => {
   const navigate = useNavigate();
   const sceneQuery = useSceneQuery(id ? Number(id) : undefined);
   const progressQuery = useMyProgressQuery();
+  const { isAuthenticated } = useAppAuth();
   const [page, setPage] = useState<number>(1);
 
   const scene = sceneQuery.data ?? null;
-  // サーバからの進捗取得に失敗してもローカルだけで表示
-  const progress = mergeProgress(progressQuery.data ?? [], readLocalProgress());
+  // サーバからの進捗取得に失敗してもローカルだけで表示（ログイン中はアカウントの進捗を表示する）
+  const progress = mergeProgress(progressQuery.data ?? [], isAuthenticated ? [] : readLocalProgress());
   const loading = sceneQuery.isPending || progressQuery.isPending;
   // 表示できるデータが無いときだけエラーを表示する（キャッシュがあれば再取得の失敗時もそのまま表示）
   const error = sceneQuery.isError && !scene ? "Scene取得エラー: " + getErrorMessage(sceneQuery.error) : null;

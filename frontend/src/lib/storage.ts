@@ -57,3 +57,11 @@ export function pushLocalProgress(item: LocalProgressEntry): void {
   }
   writeJSON(LOCAL_PROGRESS_KEY, list);
 }
+
+// サーバへ保存できた進捗をブラウザから削除する
+// 保存後により高いスコアが記録されていた場合は、次回の反映に備えて残しておく
+export function removeLocalProgressEntry(saved: LocalProgressEntry): void {
+  const list = readLocalProgress();
+  const next = list.filter((x) => !(x.lesson === saved.lesson && x.score <= saved.score));
+  if (next.length !== list.length) writeJSON(LOCAL_PROGRESS_KEY, next);
+}

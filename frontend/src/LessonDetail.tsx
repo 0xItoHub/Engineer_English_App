@@ -30,7 +30,8 @@ import {
   StopCircle as StopCircleIcon
 } from "@mui/icons-material";
 import { getErrorMessage } from "./lib/http";
-import { pushLocalProgress } from "./lib/storage";
+import { pushLocalProgress, removeLocalProgressEntry } from "./lib/storage";
+import { useAppAuth } from "./lib/auth";
 import {
   useCompleteLessonMutation,
   useLessonQuery,
@@ -56,6 +57,7 @@ function isSpeechSynthesisSupported(): boolean {
 const LessonDetail: React.FC = () => {
   const { lessonId } = useParams<{ lessonId: string }>();
   const navigate = useNavigate();
+  const { isAuthenticated } = useAppAuth();
   const lessonQuery = useLessonQuery(lessonId ? Number(lessonId) : undefined);
   // レッスン取得後に、所属するシーン（戻り先）を取得する
   const sceneQuery = useSceneQuery(lessonQuery.data?.scene);
@@ -238,12 +240,18 @@ const LessonDetail: React.FC = () => {
     // スコアを100%を超えないように制限
     const calculatedScore = Math.round((completedSteps.length + 1) / steps.length * 100);
     const score = Math.min(calculatedScore, 100);
-    // 学習進捗はブラウザにも保存し、サーバーの保存状況に関わらず履歴に反映する
-    pushLocalProgress({ lesson: Number(lessonId), score, time_spent: timeSpent });
+    // 学習進捗はまずブラウザに保存し、サーバーの保存状況に関わらず失われないようにする
+    const entry = { lesson: Number(lessonId), score, time_spent: timeSpent };
+    pushLocalProgress(entry);
+    // ログイン中はアカウントへの保存を正とし、保存できたらブラウザの記録を削除する
+    const savedToAccount = isAuthenticated;
     // サーバへの保存結果に関わらず、完了を通知して履歴画面へ進む
     completeLesson.mutate(
       { lessonId: lessonId ?? "", score, timeSpent },
       {
+        onSuccess: () => {
+          if (savedToAccount) removeLocalProgressEntry(entry);
+        },
         onSettled: () => {
           setSnackOpen(true);
           navigateTimerRef.current = setTimeout(() => navigate('/progress'), 1200);

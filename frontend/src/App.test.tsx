@@ -34,3 +34,11 @@ test('ヘッダー・メイン・フッターを表示し、トップにシー�
 test('API は資格情報（Cookie）なしで呼び出す設定になっている', () => {
   expect(axios.defaults.withCredentials).toBe(false);
 });
+
+test('Cognito の環境変数が未設定の場合はログイン機能を表示しない', async () => {
+  renderWithClient(<App />);
+
+  expect(await screen.findByText('Daily Standup')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'ログイン' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'ログアウト' })).not.toBeInTheDocument();
+});
