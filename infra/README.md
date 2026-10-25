@@ -235,4 +235,6 @@ GRANT USAGE, CREATE ON SCHEMA app TO app;
 terraform -chdir=infra output -raw cognito_authority
 ```
 
+ローカル開発でログインを試す場合は、`terraform.tfvars` で `enable_local_callbacks = true` を指定して `http://localhost:3000` の URL を登録します（既定では登録しません）。
+
 バックエンド（Lambda）には `COGNITO_USER_POOL_ID` と `COGNITO_APP_CLIENT_ID` が Terraform から設定され、API はアクセストークンを検証します。

@@ -66,18 +66,19 @@ resource "aws_cognito_user_pool_client" "spa" {
   supported_identity_providers         = ["COGNITO"]
   explicit_auth_flows                  = ["ALLOW_REFRESH_TOKEN_AUTH"]
 
+  # ローカル開発用の URL は enable_local_callbacks=true のときだけ登録する
   callback_urls = compact([
     local.frontend_origin != "" ? "${local.frontend_origin}/auth/callback" : "",
-    "http://localhost:3000/auth/callback",
+    var.enable_local_callbacks ? "http://localhost:3000/auth/callback" : "",
   ])
   logout_urls = compact([
     local.frontend_origin != "" ? "${local.frontend_origin}/" : "",
-    "http://localhost:3000/",
+    var.enable_local_callbacks ? "http://localhost:3000/" : "",
   ])
 
   access_token_validity  = 60
   id_token_validity      = 60
-  refresh_token_validity = 30
+  refresh_token_validity = 7
   token_validity_units {
     access_token  = "minutes"
     id_token      = "minutes"
