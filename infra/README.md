@@ -534,6 +534,8 @@ SELECT table_name, string_agg(privilege_type, ', ' ORDER BY privilege_type) AS p
  GROUP BY table_name ORDER BY table_name;
 SELECT has_schema_privilege('app_rw', 'app', 'USAGE')  AS usage,
        has_schema_privilege('app_rw', 'app', 'CREATE') AS create;   -- usage=true, create=false
+-- public スキーマにもオブジェクトを作成できないこと（false であること）
+SELECT has_schema_privilege('app_rw', 'public', 'CREATE') AS public_create;
 ```
 
 **手順 4. Web 用の Lambda を `app_rw` に切り替える**
