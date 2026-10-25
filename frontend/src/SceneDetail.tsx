@@ -5,7 +5,6 @@ import {
   CardContent,
   Typography,
   CircularProgress,
-  Alert,
   Box,
   Chip,
   Button,
@@ -21,23 +20,27 @@ import {
   ArrowBack as ArrowBackIcon,
   School as SchoolIcon
 } from "@mui/icons-material";
-import { getErrorMessage } from "./lib/http";
 import { useSceneQuery } from "./lib/queries";
+import { parseId } from "./lib/params";
+import { isNotFoundError, queryView } from "./lib/queryState";
 import { useLearningProgress } from "./hooks/useLearningProgress";
+import NotFound from "./components/NotFound";
+import { LoadingView, ProgressErrorAlert, QueryErrorAlert } from "./components/QueryStatus";
 
 const PAGE_SIZE = 5;
 
 const SceneDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const sceneQuery = useSceneQuery(id ? Number(id) : undefined);
+  // ID の形式が正しくない場合は取得せず「見つかりません」を表示する
+  const sceneId = parseId(id);
+  const sceneQuery = useSceneQuery(sceneId ?? undefined);
   const { query: progressQuery, items: progress } = useLearningProgress();
   const [page, setPage] = useState<number>(1);
 
   const scene = sceneQuery.data ?? null;
-  const loading = sceneQuery.isPending || progressQuery.isPending;
   // 表示できるデータが無いときだけエラーを表示する（キャッシュがあれば再取得の失敗時もそのまま表示）
-  const error = sceneQuery.isError && !scene ? "Scene取得エラー: " + getErrorMessage(sceneQuery.error) : null;
+  const view = queryView(sceneQuery);
 
   // レッスン数が変わった場合、現在ページが範囲外なら1に戻す
   useEffect(() => {
@@ -55,28 +58,27 @@ const SceneDetail: React.FC = () => {
     return hit ? 100 : 0;
   };
 
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
-        <CircularProgress size={60} aria-label="読み込み中" />
-      </Box>
-    );
+  if (sceneId === null || (view === "error" && isNotFoundError(sceneQuery.error))) {
+    return <NotFound />;
   }
 
-  if (error) {
+  if (view === "loading" || (view === "ready" && progressQuery.isLoading)) {
+    return <LoadingView />;
+  }
+
+  if (view === "error" || view === "offline") {
     return (
-      <Alert severity="error" sx={{ mt: 2 }}>
-        {error}
-      </Alert>
+      <QueryErrorAlert
+        title="シーンを取得できませんでした"
+        error={sceneQuery.error}
+        offline={view === "offline"}
+        onRetry={() => void sceneQuery.refetch()}
+      />
     );
   }
 
   if (!scene) {
-    return (
-      <Alert severity="warning" sx={{ mt: 2 }}>
-        Sceneが見つかりません
-      </Alert>
-    );
+    return <NotFound />;
   }
 
   const lessons = scene.lessons || [];
@@ -96,6 +98,9 @@ const SceneDetail: React.FC = () => {
           </Typography>
         </Paper>
       </Box>
+
+      {/* 進捗を取得できない場合も、レッスン一覧はそのまま表示する */}
+      <ProgressErrorAlert query={progressQuery} sx={{ mt: 0, mb: 3 }} />
 
       {/* レッスンのみ表示 */}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>

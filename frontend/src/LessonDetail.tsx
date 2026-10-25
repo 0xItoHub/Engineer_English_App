@@ -4,7 +4,6 @@ import {
   Card,
   CardContent,
   Typography,
-  CircularProgress,
   Alert,
   Box,
   Button,
@@ -29,13 +28,15 @@ import {
   VolumeUp as VolumeUpIcon,
   StopCircle as StopCircleIcon
 } from "@mui/icons-material";
-import { getErrorMessage } from "./lib/http";
+import { parseId } from "./lib/params";
+import { isNotFoundError, queryView } from "./lib/queryState";
+import NotFound from "./components/NotFound";
+import { LoadingView, QueryErrorAlert } from "./components/QueryStatus";
 import { pushLocalProgress, removeLocalProgressEntry } from "./lib/storage";
 import { useAppAuth } from "./lib/auth";
 import {
   useCompleteLessonMutation,
   useLessonQuery,
-  useSceneQuery,
   type Dialogue,
   type Phrase,
 } from "./lib/queries";
@@ -58,9 +59,9 @@ const LessonDetail: React.FC = () => {
   const { lessonId } = useParams<{ lessonId: string }>();
   const navigate = useNavigate();
   const { isAuthenticated } = useAppAuth();
-  const lessonQuery = useLessonQuery(lessonId ? Number(lessonId) : undefined);
-  // レッスン取得後に、所属するシーン（戻り先）を取得する
-  const sceneQuery = useSceneQuery(lessonQuery.data?.scene);
+  // ID の形式が正しくない場合は取得せず「見つかりません」を表示する
+  const lessonNumber = parseId(lessonId);
+  const lessonQuery = useLessonQuery(lessonNumber ?? undefined);
   const completeLesson = useCompleteLessonMutation();
   const [currentStep, setCurrentStep] = useState(0);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
@@ -261,26 +262,30 @@ const LessonDetail: React.FC = () => {
   };
 
   const lesson = lessonQuery.data ?? null;
-  const scene = sceneQuery.data ?? null;
   const saving = completeLesson.isPending;
-  const loading = lessonQuery.isPending || (!!lesson && sceneQuery.isPending);
-  const failed = lessonQuery.isError && !lesson ? lessonQuery.error : sceneQuery.isError && !scene ? sceneQuery.error : null;
-  const error = failed ? "レッスン取得エラー: " + getErrorMessage(failed) : null;
+  const view = queryView(lessonQuery);
 
-  if (loading) {
+  if (lessonNumber === null || (view === "error" && isNotFoundError(lessonQuery.error))) {
+    return <NotFound />;
+  }
+
+  if (view === "loading") {
+    return <LoadingView />;
+  }
+
+  if (view === "error" || view === "offline") {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
-        <CircularProgress size={60} aria-label="読み込み中" />
-      </Box>
+      <QueryErrorAlert
+        title="レッスンを取得できませんでした"
+        error={lessonQuery.error}
+        offline={view === "offline"}
+        onRetry={() => void lessonQuery.refetch()}
+      />
     );
   }
 
-  if (error || !lesson || !scene) {
-    return (
-      <Alert severity="error" sx={{ mt: 2 }}>
-        {error || 'データ取得に失敗しました'}
-      </Alert>
-    );
+  if (!lesson) {
+    return <NotFound />;
   }
 
   const progress = ((completedSteps.length + (currentStep === steps.length - 1 ? 1 : 0)) / steps.length) * 100;
@@ -289,7 +294,7 @@ const LessonDetail: React.FC = () => {
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       {/* ヘッダー */}
       <Box sx={{ mb: 3 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(`/scene/${scene.id}`)} sx={{ mb: 2 }}>
+        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(`/scene/${lesson.scene}`)} sx={{ mb: 2 }}>
           シーンに戻る
         </Button>
         <Paper elevation={0} sx={{ p: 3, backgroundColor: "#f5f5f5" }}>

@@ -20,6 +20,7 @@ import ProgressHistory from "./ProgressHistory";
 import SiteFooter from "./components/SiteFooter";
 import ChatWidget from "./components/ChatWidget";
 import ErrorBoundary from "./components/ErrorBoundary";
+import NotFound from "./components/NotFound";
 import AppAuthProvider from "./components/AppAuthProvider";
 import AuthControls from "./components/AuthControls";
 import AuthCallback from "./components/AuthCallback";
@@ -53,6 +54,8 @@ function AppRoutes() {
         <Route path="/terms" element={<div>利用規約（準備中）</div>} />
         <Route path="/privacy" element={<div>プライバシーポリシー（準備中）</div>} />
         <Route path="/contact" element={<div>お問い合わせ（準備中）</div>} />
+        {/* 該当するページが無い URL */}
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </ErrorBoundary>
   );

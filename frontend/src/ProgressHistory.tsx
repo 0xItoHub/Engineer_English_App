@@ -4,7 +4,6 @@ import {
   Card,
   CardContent,
   Typography,
-  CircularProgress,
   Box,
   Button,
   Paper,
@@ -25,7 +24,9 @@ import {
   AccessTime as AccessTimeIcon
 } from "@mui/icons-material";
 import { useScenesQuery, type ProgressItem, type Scene } from "./lib/queries";
+import { queryView } from "./lib/queryState";
 import { useLearningProgress } from "./hooks/useLearningProgress";
+import { LoadingView, QueryErrorAlert } from "./components/QueryStatus";
 
 type Progress = {
   id?: number;
@@ -64,10 +65,12 @@ const toProgress = (p: ProgressItem, lessonMap: Map<number, { lesson_title: stri
 
 const ProgressHistory: React.FC = () => {
   const navigate = useNavigate();
-  const { query: progressQuery, items } = useLearningProgress();
+  const { query: progressQuery, items, authLoading } = useLearningProgress();
   // シーン一覧はホーム画面と共有し、ローカル進捗のタイトル補完に使う
   const scenesQuery = useScenesQuery();
-  const loading = progressQuery.isPending || scenesQuery.isPending;
+  const view = queryView(progressQuery);
+  // ログイン状態の確認中は、表示するユーザーが確定するまで読み込み中とする
+  const loading = authLoading || view === "loading" || scenesQuery.isLoading;
 
   // サーバダウン時はシーン一覧が空となり、タイトルはフォールバック表示になる
   const progress = useMemo<Progress[]>(() => {
@@ -100,11 +103,7 @@ const ProgressHistory: React.FC = () => {
   const getTotalTime = () => progress.reduce((sum, p) => sum + p.time_spent, 0);
 
   if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
-        <CircularProgress size={60} aria-label="読み込み中" />
-      </Box>
-    );
+    return <LoadingView />;
   }
 
   return (
@@ -123,91 +122,102 @@ const ProgressHistory: React.FC = () => {
         </Paper>
       </Box>
 
-      <Box sx={{ mb: 4 }}>
-        <Box component="section" aria-label="学習サマリー" sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-          <Box sx={{ flex: '1 1 300px', minWidth: '250px' }}>
-            <Card elevation={2}>
-              <CardContent sx={{ textAlign: 'center' }}>
-                <SchoolIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
-                <Typography variant="h4" color="primary.main">{progress.length}</Typography>
-                <Typography variant="body2" color="text.secondary">完了レッスン数</Typography>
-              </CardContent>
-            </Card>
-          </Box>
-          <Box sx={{ flex: '1 1 300px', minWidth: '250px' }}>
-            <Card elevation={2}>
-              <CardContent sx={{ textAlign: 'center' }}>
-                <TrendingUpIcon sx={{ fontSize: 40, color: 'success.main', mb: 1 }} />
-                <Typography variant="h4" color="success.main">{getTotalScore()}%</Typography>
-                <Typography variant="body2" color="text.secondary">平均スコア</Typography>
-              </CardContent>
-            </Card>
-          </Box>
-          <Box sx={{ flex: '1 1 300px', minWidth: '250px' }}>
-            <Card elevation={2}>
-              <CardContent sx={{ textAlign: 'center' }}>
-                <AccessTimeIcon sx={{ fontSize: 40, color: 'info.main', mb: 1 }} />
-                <Typography variant="h4" color="info.main">{formatTime(getTotalTime())}</Typography>
-                <Typography variant="body2" color="text.secondary">総学習時間</Typography>
-              </CardContent>
-            </Card>
-          </Box>
-        </Box>
-      </Box>
-
-      {progress.length === 0 ? (
-        <Paper elevation={1} sx={{ p: 4, textAlign: "center" }}>
-          <SchoolIcon sx={{ fontSize: 60, color: "text.secondary", mb: 2 }} />
-          <Typography variant="h6" color="text.secondary" gutterBottom>
-            まだ学習履歴がありません
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            レッスンを完了すると、ここに履歴が表示されます
-          </Typography>
-          <Button variant="contained" onClick={() => navigate("/")} sx={{ mt: 2 }}>
-            レッスンを始める
-          </Button>
-        </Paper>
+      {view === "error" || view === "offline" ? (
+        <QueryErrorAlert
+          title="学習履歴を取得できませんでした"
+          error={progressQuery.error}
+          offline={view === "offline"}
+          onRetry={() => void progressQuery.refetch()}
+        />
       ) : (
-        <Card elevation={2}>
-          <CardContent>
-            <Typography variant="h6" component="h2" id="progress-table-title" gutterBottom>学習履歴一覧</Typography>
-            <TableContainer>
-              <Table aria-labelledby="progress-table-title">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>レッスン</TableCell>
-                    <TableCell>シーン</TableCell>
-                    <TableCell>完了日時</TableCell>
-                    <TableCell>スコア</TableCell>
-                    <TableCell>学習時間</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {progress.map((item) => (
-                    <TableRow key={item.id ?? `local-${item.lesson}`}>
-                      <TableCell><Typography variant="body1" sx={{ fontWeight: 'bold' }}>{item.lesson_title}</Typography></TableCell>
-                      <TableCell><Chip label={item.scene_title} size="small" color="primary" /></TableCell>
-                      <TableCell><Typography variant="body2" color="text.secondary">{formatDate(item.completed_at)}</Typography></TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography variant="body2">100%</Typography>
-                          <LinearProgress
-                            variant="determinate"
-                            value={100}
-                            aria-label={`${item.lesson_title} のスコア`}
-                            sx={{ width: 60, height: 6, borderRadius: 3 }}
-                          />
-                        </Box>
-                      </TableCell>
-                      <TableCell><Typography variant="body2" color="text.secondary">{formatTime(item.time_spent)}</Typography></TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </CardContent>
-        </Card>
+        <>
+          <Box sx={{ mb: 4 }}>
+            <Box component="section" aria-label="学習サマリー" sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+              <Box sx={{ flex: '1 1 300px', minWidth: '250px' }}>
+                <Card elevation={2}>
+                  <CardContent sx={{ textAlign: 'center' }}>
+                    <SchoolIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
+                    <Typography variant="h4" color="primary.main">{progress.length}</Typography>
+                    <Typography variant="body2" color="text.secondary">完了レッスン数</Typography>
+                  </CardContent>
+                </Card>
+              </Box>
+              <Box sx={{ flex: '1 1 300px', minWidth: '250px' }}>
+                <Card elevation={2}>
+                  <CardContent sx={{ textAlign: 'center' }}>
+                    <TrendingUpIcon sx={{ fontSize: 40, color: 'success.main', mb: 1 }} />
+                    <Typography variant="h4" color="success.main">{getTotalScore()}%</Typography>
+                    <Typography variant="body2" color="text.secondary">平均スコア</Typography>
+                  </CardContent>
+                </Card>
+              </Box>
+              <Box sx={{ flex: '1 1 300px', minWidth: '250px' }}>
+                <Card elevation={2}>
+                  <CardContent sx={{ textAlign: 'center' }}>
+                    <AccessTimeIcon sx={{ fontSize: 40, color: 'info.main', mb: 1 }} />
+                    <Typography variant="h4" color="info.main">{formatTime(getTotalTime())}</Typography>
+                    <Typography variant="body2" color="text.secondary">総学習時間</Typography>
+                  </CardContent>
+                </Card>
+              </Box>
+            </Box>
+          </Box>
+
+          {progress.length === 0 ? (
+            <Paper elevation={1} sx={{ p: 4, textAlign: "center" }}>
+              <SchoolIcon sx={{ fontSize: 60, color: "text.secondary", mb: 2 }} />
+              <Typography variant="h6" color="text.secondary" gutterBottom>
+                まだ学習履歴がありません
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                レッスンを完了すると、ここに履歴が表示されます
+              </Typography>
+              <Button variant="contained" onClick={() => navigate("/")} sx={{ mt: 2 }}>
+                レッスンを始める
+              </Button>
+            </Paper>
+          ) : (
+            <Card elevation={2}>
+              <CardContent>
+                <Typography variant="h6" component="h2" id="progress-table-title" gutterBottom>学習履歴一覧</Typography>
+                <TableContainer>
+                  <Table aria-labelledby="progress-table-title">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>レッスン</TableCell>
+                        <TableCell>シーン</TableCell>
+                        <TableCell>完了日時</TableCell>
+                        <TableCell>スコア</TableCell>
+                        <TableCell>学習時間</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {progress.map((item) => (
+                        <TableRow key={item.id ?? `local-${item.lesson}`}>
+                          <TableCell><Typography variant="body1" sx={{ fontWeight: 'bold' }}>{item.lesson_title}</Typography></TableCell>
+                          <TableCell><Chip label={item.scene_title} size="small" color="primary" /></TableCell>
+                          <TableCell><Typography variant="body2" color="text.secondary">{formatDate(item.completed_at)}</Typography></TableCell>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Typography variant="body2">100%</Typography>
+                              <LinearProgress
+                                variant="determinate"
+                                value={100}
+                                aria-label={`${item.lesson_title} のスコア`}
+                                sx={{ width: 60, height: 6, borderRadius: 3 }}
+                              />
+                            </Box>
+                          </TableCell>
+                          <TableCell><Typography variant="body2" color="text.secondary">{formatTime(item.time_spent)}</Typography></TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </CardContent>
+            </Card>
+          )}
+        </>
       )}
     </Container>
   );

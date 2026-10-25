@@ -5,6 +5,7 @@ import axios from 'axios';
 import ScenesList from './ScenesList';
 import { LOCAL_PROGRESS_KEY, pushLocalProgress } from './lib/storage';
 import { renderWithClient } from './test/renderWithClient';
+import { onlineManager } from '@tanstack/react-query';
 
 vi.mock('axios');
 const mockedAxios = axios as Mocked<typeof axios>;
@@ -113,13 +114,39 @@ test('「学習開始」でシーン詳細へ遷移する', async () => {
   expect(screen.getByText('scene page')).toBeInTheDocument();
 });
 
-test('API に接続できない場合も空の状態を表示する（ローカル進捗が壊れていても落ちない）', async () => {
-  mockedAxios.get.mockRejectedValue(new Error('Network Error'));
+test('API に接続できない場合はエラーと「再試行」を表示し、再試行で一覧を表示する（ローカル進捗が壊れていても落ちない）', async () => {
+  mockedAxios.get.mockRejectedValue({ isAxiosError: true, message: 'Network Error' });
   window.localStorage.setItem(LOCAL_PROGRESS_KEY, '{not json');
 
   renderScenesList();
 
-  expect(await screen.findByText('まだシーンが登録されていません')).toBeInTheDocument();
+  expect(await screen.findByText('サーバーに接続できませんでした。通信環境を確認して、しばらくしてから再度お試しください。')).toBeInTheDocument();
+  expect(screen.getByText('シーン一覧を取得できませんでした')).toBeInTheDocument();
+  expect(screen.queryByText('まだシーンが登録されていません')).not.toBeInTheDocument();
   // 集計できるデータが無いときは教材の数を表示しない
   expect(screen.queryByRole('region', { name: '収録コンテンツ' })).not.toBeInTheDocument();
+
+  mockedAxios.get.mockImplementation((url: string) =>
+    url.endsWith('/api/scenes/') ? Promise.resolve({ data: scenes }) : Promise.resolve({ data: [] })
+  );
+  fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+  expect(await screen.findByText('Daily Standup')).toBeInTheDocument();
+});
+
+test('シーンが 0 件の場合は空の状態を表示する', async () => {
+  mockedAxios.get.mockResolvedValue({ data: [] });
+
+  renderScenesList();
+
+  expect(await screen.findByText('まだシーンが登録されていません')).toBeInTheDocument();
+});
+
+test('オフラインの場合は接続を確認する案内を表示する', async () => {
+  onlineManager.setOnline(false);
+  try {
+    renderScenesList();
+    expect(await screen.findByText('オフラインです。接続を確認してください。')).toBeInTheDocument();
+  } finally {
+    onlineManager.setOnline(true);
+  }
 });

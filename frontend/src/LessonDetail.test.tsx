@@ -26,9 +26,9 @@ function mockLessonApi() {
   });
 }
 
-function renderLessonDetail() {
+function renderLessonDetail(path = '/lesson/5') {
   return renderWithClient(
-    <MemoryRouter initialEntries={['/lesson/5']}>
+    <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/lesson/:lessonId" element={<LessonDetail />} />
         <Route path="/scene/:id" element={<div>scene page</div>} />
@@ -147,11 +147,40 @@ test('サーバに保存できた場合も進捗をローカルに保存する',
   expect(saved).toEqual([expect.objectContaining({ lesson: 5, score: 100 })]);
 });
 
-test('レッスン取得に失敗した場合は分かりやすいエラーを表示する', async () => {
-  mockedAxios.get.mockRejectedValue({ isAxiosError: true, message: 'Request failed', response: { status: 500 } });
+test('レッスン取得に失敗した場合は分かりやすいエラーを表示し、「再試行」で取得し直す', async () => {
+  mockedAxios.get.mockRejectedValueOnce({ isAxiosError: true, message: 'Request failed', response: { status: 500 } });
   renderLessonDetail();
 
-  expect(
-    await screen.findByText('レッスン取得エラー: サーバーでエラーが発生しました。しばらくしてから再度お試しください。')
-  ).toBeInTheDocument();
+  expect(await screen.findByText('サーバーでエラーが発生しました。しばらくしてから再度お試しください。')).toBeInTheDocument();
+  expect(screen.getByText('レッスンを取得できませんでした')).toBeInTheDocument();
+
+  mockLessonApi();
+  fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+  expect(await screen.findByRole('heading', { level: 1, name: /Daily report/ })).toBeInTheDocument();
+});
+
+test('レッスンが見つからない（404）場合は「ページが見つかりませんでした」を表示する', async () => {
+  mockedAxios.get.mockRejectedValue({ isAxiosError: true, response: { status: 404 } });
+  renderLessonDetail();
+
+  expect(await screen.findByRole('heading', { level: 1, name: 'ページが見つかりませんでした' })).toBeInTheDocument();
+});
+
+test('形式の正しくない ID は取得せずに「ページが見つかりませんでした」を表示する', async () => {
+  renderLessonDetail('/lesson/5abc');
+
+  expect(await screen.findByRole('heading', { level: 1, name: 'ページが見つかりませんでした' })).toBeInTheDocument();
+  expect(screen.queryByLabelText('読み込み中')).not.toBeInTheDocument();
+  expect(mockedAxios.get).not.toHaveBeenCalled();
+});
+
+test('シーンの取得に失敗してもレッスンを表示し、レッスンの所属シーンへ戻れる', async () => {
+  mockedAxios.get.mockImplementation((url: string) => {
+    if (url.endsWith('/api/lessons/5/')) return Promise.resolve({ data: lesson });
+    return Promise.reject({ isAxiosError: true, response: { status: 500 } });
+  });
+  renderLessonDetail();
+
+  fireEvent.click(await screen.findByRole('button', { name: 'シーンに戻る' }));
+  expect(screen.getByText('scene page')).toBeInTheDocument();
 });

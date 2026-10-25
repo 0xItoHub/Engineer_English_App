@@ -1,5 +1,5 @@
 import { vi, type Mocked } from 'vitest';
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import axios from 'axios';
 import App from './App';
 import { renderWithClient } from './test/renderWithClient';
@@ -29,6 +29,19 @@ test('ヘッダー・メイン・フッターを表示し、トップにシー�
   expect(screen.getByRole('link', { name: '本文へスキップ' })).toHaveAttribute('href', '#main-content');
 
   expect(await screen.findByText('Daily Standup')).toBeInTheDocument();
+});
+
+test('存在しない URL では「ページが見つかりませんでした」とホームへのボタンを表示する', async () => {
+  window.history.pushState(null, '', '/no-such-page');
+  try {
+    renderWithClient(<App />);
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'ページが見つかりませんでした' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('link', { name: 'ホームへ' }));
+    expect(await screen.findByText('Daily Standup')).toBeInTheDocument();
+  } finally {
+    window.history.pushState(null, '', '/');
+  }
 });
 
 test('API は資格情報（Cookie）なしで呼び出す設定になっている', () => {
