@@ -45,6 +45,20 @@ import {
 const SPEECH_RATES = [0.75, 1, 1.25, 1.5];
 const DEFAULT_SPEECH_RATE = 1.5;
 
+// 完了時にサーバへ送るスコア（API との互換性のため、完了は常に 100 として記録する）
+const COMPLETED_SCORE = 100;
+
+// 完了の通知を表示してから学習履歴へ移動するまでの時間
+const NAVIGATE_DELAY_MS = 1200;
+const NAVIGATE_DELAY_WARNING_MS = 3000;
+
+type CompletionNotice = { severity: "success" | "warning"; message: string };
+const SUCCESS_NOTICE: CompletionNotice = { severity: "success", message: "レッスンを完了しました！" };
+const PENDING_NOTICE: CompletionNotice = {
+  severity: "warning",
+  message: "サーバーへの保存に失敗しました。次回ログイン時に再送します。",
+};
+
 // Web Speech API（音声合成）が利用できるか
 function isSpeechSynthesisSupported(): boolean {
   return (
@@ -58,15 +72,17 @@ function isSpeechSynthesisSupported(): boolean {
 const LessonDetail: React.FC = () => {
   const { lessonId } = useParams<{ lessonId: string }>();
   const navigate = useNavigate();
-  const { isAuthenticated } = useAppAuth();
+  const { isAuthenticated, sub } = useAppAuth();
   // ID の形式が正しくない場合は取得せず「見つかりません」を表示する
   const lessonNumber = parseId(lessonId);
   const lessonQuery = useLessonQuery(lessonNumber ?? undefined);
   const completeLesson = useCompleteLessonMutation();
   const [currentStep, setCurrentStep] = useState(0);
-  const [completedSteps, setCompletedSteps] = useState<number[]>([]);
+  // 「レッスン完了」を押した後は true（画面を離れるまで再送信しない）
+  const [finished, setFinished] = useState(false);
+  const submittedRef = useRef(false);
   const [startTime, setStartTime] = useState<Date | null>(null);
-  const [snackOpen, setSnackOpen] = useState(false);
+  const [notice, setNotice] = useState<CompletionNotice | null>(null);
 
   // TTS（Web Speech API）
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -222,40 +238,47 @@ const LessonDetail: React.FC = () => {
     "まとめ"
   ];
 
+  const lastStep = steps.length - 1;
+
   const handleNext = () => {
-    if (currentStep < steps.length - 1) {
-      setCompletedSteps([...completedSteps, currentStep]);
-      setCurrentStep(currentStep + 1);
-    }
+    if (currentStep < lastStep) setCurrentStep(currentStep + 1);
   };
 
   const handleBack = () => {
-    if (currentStep > 0) {
-      setCurrentStep(currentStep - 1);
-    }
+    if (currentStep > 0) setCurrentStep(currentStep - 1);
   };
 
   const handleComplete = () => {
-    setCompletedSteps([...completedSteps, currentStep]);
+    // 連続して押しても 1 回だけ保存する
+    if (submittedRef.current || lessonNumber === null) return;
+    submittedRef.current = true;
+    setFinished(true);
     const timeSpent = startTime ? Math.floor((new Date().getTime() - startTime.getTime()) / 1000) : 0;
-    // スコアを100%を超えないように制限
-    const calculatedScore = Math.round((completedSteps.length + 1) / steps.length * 100);
-    const score = Math.min(calculatedScore, 100);
     // 学習進捗はまずブラウザに保存し、サーバーの保存状況に関わらず失われないようにする
-    const entry = { lesson: Number(lessonId), score, time_spent: timeSpent };
+    // ログイン中は本人の保存待ちの記録として保存し、アカウントに保存できたら削除する
+    const owner = isAuthenticated ? sub : null;
+    const entry = {
+      lesson: lessonNumber,
+      score: COMPLETED_SCORE,
+      time_spent: timeSpent,
+      owner,
+      completed_at: new Date().toISOString(),
+    };
     pushLocalProgress(entry);
-    // ログイン中はアカウントへの保存を正とし、保存できたらブラウザの記録を削除する
-    const savedToAccount = isAuthenticated;
-    // サーバへの保存結果に関わらず、完了を通知して履歴画面へ進む
+    const finish = (next: CompletionNotice, delay: number) => {
+      setNotice(next);
+      navigateTimerRef.current = setTimeout(() => navigate("/progress"), delay);
+    };
     completeLesson.mutate(
-      { lessonId: lessonId ?? "", score, timeSpent },
+      { lessonId: String(lessonNumber), score: COMPLETED_SCORE, timeSpent },
       {
         onSuccess: () => {
-          if (savedToAccount) removeLocalProgressEntry(entry);
+          if (owner) removeLocalProgressEntry(entry);
+          finish(SUCCESS_NOTICE, NAVIGATE_DELAY_MS);
         },
-        onSettled: () => {
-          setSnackOpen(true);
-          navigateTimerRef.current = setTimeout(() => navigate('/progress'), 1200);
+        onError: () => {
+          // 未ログイン時はブラウザへの保存で完了とし、ログイン中は次回ログイン時の再送を案内する
+          finish(owner ? PENDING_NOTICE : SUCCESS_NOTICE, owner ? NAVIGATE_DELAY_WARNING_MS : NAVIGATE_DELAY_MS);
         },
       }
     );
@@ -288,13 +311,15 @@ const LessonDetail: React.FC = () => {
     return <NotFound />;
   }
 
-  const progress = ((completedSteps.length + (currentStep === steps.length - 1 ? 1 : 0)) / steps.length) * 100;
+  // 進捗は現在のステップの位置から求める（戻る・進むを繰り返しても 100% を超えない）
+  const progress = Math.min(100, Math.max(0, (currentStep / lastStep) * 100));
+  const backPath = Number.isSafeInteger(lesson.scene) && lesson.scene > 0 ? `/scene/${lesson.scene}` : "/";
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       {/* ヘッダー */}
       <Box sx={{ mb: 3 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(`/scene/${lesson.scene}`)} sx={{ mb: 2 }}>
+        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(backPath)} sx={{ mb: 2 }}>
           シーンに戻る
         </Button>
         <Paper elevation={0} sx={{ p: 3, backgroundColor: "#f5f5f5" }}>
@@ -324,7 +349,7 @@ const LessonDetail: React.FC = () => {
       <Box sx={{ mb: 4 }}>
         <Stepper activeStep={currentStep} alternativeLabel>
           {steps.map((label, index) => (
-            <Step key={label} completed={completedSteps.includes(index)}>
+            <Step key={label} completed={index < currentStep || (finished && index === lastStep)}>
               <StepLabel>{label}</StepLabel>
             </Step>
           ))}
@@ -422,11 +447,11 @@ const LessonDetail: React.FC = () => {
 
       {/* ナビゲーション */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
-        <Button disabled={currentStep === 0} onClick={handleBack}>前へ</Button>
+        <Button disabled={currentStep === 0 || finished} onClick={handleBack}>前へ</Button>
         <Box>
-          {currentStep === steps.length - 1 ? (
-            <Button variant="contained" onClick={handleComplete} startIcon={<CheckIcon />} disabled={saving}>
-              {saving ? '保存中...' : 'レッスン完了'}
+          {currentStep === lastStep ? (
+            <Button variant="contained" onClick={handleComplete} startIcon={<CheckIcon />} disabled={finished}>
+              {saving ? '保存中...' : finished ? '完了しました' : 'レッスン完了'}
             </Button>
           ) : (
             <Button variant="contained" onClick={handleNext}>次へ</Button>
@@ -434,9 +459,9 @@ const LessonDetail: React.FC = () => {
         </Box>
       </Box>
 
-      <Snackbar open={snackOpen} autoHideDuration={1200} onClose={() => setSnackOpen(false)}>
-        <Alert severity="success" variant="filled" sx={{ width: '100%' }}>
-          レッスンを完了しました！
+      <Snackbar open={!!notice} autoHideDuration={notice?.severity === 'warning' ? NAVIGATE_DELAY_WARNING_MS : NAVIGATE_DELAY_MS} onClose={() => setNotice(null)}>
+        <Alert severity={notice?.severity ?? 'success'} variant="filled" sx={{ width: '100%' }}>
+          {notice?.message}
         </Alert>
       </Snackbar>
     </Container>

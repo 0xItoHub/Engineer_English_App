@@ -124,7 +124,7 @@ test('サーバに保存できない場合は進捗をローカルに保存す�
   expect(await screen.findByText('レッスンを完了しました！')).toBeInTheDocument();
   await waitFor(() => {
     const saved = JSON.parse(window.localStorage.getItem(LOCAL_PROGRESS_KEY) || '[]');
-    expect(saved).toEqual([expect.objectContaining({ lesson: 5, score: 100 })]);
+    expect(saved).toEqual([expect.objectContaining({ lesson: 5, score: 100, owner: null, completed_at: expect.any(String) })]);
   });
   expect(mockedAxios.post).toHaveBeenCalledWith(
     expect.stringContaining('/api/progress/complete_lesson/'),
@@ -183,4 +183,50 @@ test('シーンの取得に失敗してもレッスンを表示し、レッス�
 
   fireEvent.click(await screen.findByRole('button', { name: 'シーンに戻る' }));
   expect(screen.getByText('scene page')).toBeInTheDocument();
+});
+
+function progressText() {
+  return screen.getByText(/^進捗: \d+%$/).textContent;
+}
+
+test('レッスン内の進捗は現在のステップの位置で表示し、戻る・進むを繰り返しても 100% を超えない', async () => {
+  mockLessonApi();
+  renderLessonDetail();
+
+  await screen.findByRole('heading', { level: 1, name: /Daily report/ });
+  expect(progressText()).toBe('進捗: 0%');
+  const next = () => fireEvent.click(screen.getByRole('button', { name: '次へ' }));
+  const back = () => fireEvent.click(screen.getByRole('button', { name: '前へ' }));
+
+  next();
+  next();
+  back();
+  next();
+  back();
+  next();
+  expect(progressText()).toBe('進捗: 67%');
+  next();
+  expect(progressText()).toBe('進捗: 100%');
+  back();
+  next();
+  expect(progressText()).toBe('進捗: 100%');
+  expect(screen.getByRole('progressbar', { name: 'レッスンの進捗' })).toHaveAttribute('aria-valuenow', '100');
+});
+
+test('「レッスン完了」は 1 回だけ送信し、完了後はボタンを無効にする', async () => {
+  mockLessonApi();
+  mockedAxios.post.mockResolvedValue({ status: 200, data: { ok: true } });
+  renderLessonDetail();
+
+  fireEvent.click(await screen.findByRole('button', { name: '次へ' }));
+  fireEvent.click(screen.getByRole('button', { name: '次へ' }));
+  fireEvent.click(screen.getByRole('button', { name: '次へ' }));
+  const button = screen.getByRole('button', { name: 'レッスン完了' });
+  fireEvent.click(button);
+  fireEvent.click(button);
+
+  expect(await screen.findByText('レッスンを完了しました！')).toBeInTheDocument();
+  expect(mockedAxios.post).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole('button', { name: '完了しました' })).toBeDisabled();
+  expect(await screen.findByText('progress page', {}, { timeout: 3000 })).toBeInTheDocument();
 });
