@@ -12,6 +12,10 @@ os.environ.setdefault("DJANGO_THROTTLE_ANON", "100000/min")
 os.environ.setdefault("DJANGO_THROTTLE_USER", "100000/min")
 os.environ.setdefault("DJANGO_THROTTLE_COMPLETE_LESSON", "100000/min")
 os.environ.setdefault("DJANGO_THROTTLE_CSP_REPORT", "100000/min")
+os.environ.setdefault("DJANGO_THROTTLE_CHAT", "100000/min")
+# AI チャットは各テストで設定を指定する（既定は無効）
+for _name in [n for n in os.environ if n.startswith("CHAT_")]:
+    os.environ.pop(_name)
 
 from .settings import *  # noqa: E402, F403
 
