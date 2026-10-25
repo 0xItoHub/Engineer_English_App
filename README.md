@@ -19,7 +19,7 @@
 ## 機能
 - シーン一覧/詳細、レッスン詳細（円形進捗メーター）
 - 学習履歴
-- TTS（Web Speech API）
+- 英文の読み上げ（事前に生成した音声を再生し、未対応の文は Web Speech API で読み上げ。速度は 0.75〜1.5 倍）
 - 右下 AI Chatbot（ダミー実装）
 - API エンドポイント例（相対パス）
   - `GET /api/scenes/`
@@ -38,6 +38,7 @@
 ├─ core/                   # アプリ（モデル/シリアライザ/ビュー等）
 ├─ frontend/               # React (Vite) フロント
 ├─ infra/                  # Terraform (Lambda+APIGW+S3 の最小構成)
+├─ scripts/                # 開発用スクリプト（読み上げ音声の生成）
 ├─ lambda.py               # Lambda ハンドラ（Mangum）
 ├─ Dockerfile.lambda       # Lambda 用コンテナ Dockerfile
 ├─ requirements.txt        # Python 依存
@@ -123,6 +124,9 @@ aws ssm put-parameter --name "/<project>/django-secret-key" --type SecureString 
 - 学習コンテンツは読み取り専用。学習進捗はログインユーザー本人のデータのみ参照・記録できる
 
 ---
+
+## クレジット
+- 音声: [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M)（Apache-2.0）で事前に生成した音声を配信（未対応の文はブラウザの音声合成）。生成手順は [DEVELOPMENT.md](DEVELOPMENT.md#読み上げ音声の生成) を参照
 
 ## ライセンス
 MIT 

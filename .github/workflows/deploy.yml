@@ -209,6 +209,7 @@ jobs:
 
       # ファイルの種類ごとにブラウザ・CloudFront のキャッシュ期間を指定してアップロードする
       # - assets/（ファイル名にハッシュを含む JS / CSS）: 1 年間・変更なし（immutable）
+      # - audio/（ファイル名にハッシュを含む読み上げ音声の MP3）: 1 年間・変更なし（immutable）
       # - images/ とその他の静的ファイル: 1 日
       # - index.html: 毎回更新を確認（no-cache）。新しいアセットのアップロード後に最後に置き換える
       - name: Sync to S3
@@ -216,10 +217,12 @@ jobs:
           set -euo pipefail
           aws s3 sync build/assets "s3://${FRONTEND_BUCKET}/assets" --delete \
             --cache-control "public, max-age=31536000, immutable"
+          aws s3 sync build/audio "s3://${FRONTEND_BUCKET}/audio" --delete \
+            --cache-control "public, max-age=31536000, immutable" --content-type "audio/mpeg"
           aws s3 sync build/images "s3://${FRONTEND_BUCKET}/images" --delete \
             --cache-control "public, max-age=86400"
           aws s3 sync build/ "s3://${FRONTEND_BUCKET}" --delete \
-            --exclude "assets/*" --exclude "images/*" --exclude "index.html" \
+            --exclude "assets/*" --exclude "audio/*" --exclude "images/*" --exclude "index.html" \
             --cache-control "public, max-age=86400"
           aws s3 cp build/index.html "s3://${FRONTEND_BUCKET}/index.html" \
             --cache-control "no-cache" --content-type "text/html; charset=utf-8"

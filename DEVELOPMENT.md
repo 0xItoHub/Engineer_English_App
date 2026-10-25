@@ -80,6 +80,43 @@ npm run dev   # http://localhost:3000
 フロントエンドは Vite で構成しています（Node.js 22.12 以上）。`frontend/vite.config.ts` の `server.proxy` 設定により、開発サーバから `/api/...` へのリクエストは `http://127.0.0.1:8000` のバックエンドへ転送されます。先にバックエンドを起動しておいてください。
 API の接続先は `VITE_API_BASE_URL`（ビルド時に埋め込み）で指定でき、未設定なら同一オリジンの `/api/...` を呼び出します。
 
+### 読み上げ音声の生成
+
+フレーズ・対話の英文は、[Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M)（Apache-2.0）で事前に生成した MP3 を再生します（声: `af_heart`、速度 1.0）。
+音声ファイルは `frontend/public/audio/<key>.mp3`、英文との対応表は `frontend/src/data/audioManifest.json` にあり、どちらもリポジトリに含めます。
+対応表に無い英文は、ブラウザの音声合成（Web Speech API）で読み上げます。
+
+`core/management/commands/seed_six_scenes.py` の英文を追加・変更したら、次の手順で音声を生成し直します（CI では実行しません）。
+
+1. 依存をインストールします（アプリ用とは別に、リポジトリの外に仮想環境を作ります）。
+
+   ```bash
+   python3 -m venv ~/.venvs/kokoro-audio
+   ~/.venvs/kokoro-audio/bin/pip install -r scripts/requirements-audio.txt
+   ```
+
+2. モデルファイル `kokoro-v1.0.onnx` と `voices-v1.0.bin` を [kokoro-onnx のリリース（model-files-v1.0）](https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.0) から取得し、リポジトリの外に置きます。
+3. 英語の発音記号への変換に使う espeak-ng をインストールします（macOS: `brew install espeak-ng`）。
+4. スクリプトを実行します。パスは引数または環境変数（`KOKORO_MODEL` / `KOKORO_VOICES` / `ESPEAK_LIB` / `ESPEAK_DATA`）で指定します。
+
+   ```bash
+   ~/.venvs/kokoro-audio/bin/python scripts/generate_audio.py \
+     --model /path/to/kokoro-v1.0.onnx \
+     --voices /path/to/voices-v1.0.bin \
+     --espeak-lib "$(brew --prefix espeak-ng)/lib/libespeak-ng.dylib" \
+     --espeak-data "$(brew --prefix espeak-ng)/share/espeak-ng-data" \
+     --prune
+   ```
+
+   - まだ音声が無い英文だけを生成し、対応表を更新します（`--force` ですべて生成し直します）。
+   - `--prune` を付けると、使われなくなった MP3 を削除します。
+   - `--list` で、音声を生成せずに対象の英文とファイル名を確認できます。
+   - `--help` で、その他の指定（声・速度など）を確認できます。
+
+5. 生成した `frontend/public/audio/*.mp3` と `frontend/src/data/audioManifest.json` をコミットします。
+
+ファイル名は英文と生成の条件から求めたハッシュのため、内容が変わるとファイル名も変わります。デプロイでは `audio/` を長期間キャッシュする設定でアップロードします（[frontend/README.md](frontend/README.md#ビルドとデプロイ) を参照）。
+
 ## テストと lint
 
 ### バックエンド
