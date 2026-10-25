@@ -31,8 +31,6 @@ import axios from "axios";
 
 // API は Cookie を使わないため、クロスオリジンでも資格情報は送信しない
 axios.defaults.withCredentials = false;
-axios.defaults.xsrfCookieName = "csrftoken";
-axios.defaults.xsrfHeaderName = "X-CSRFToken";
 // ログイン中は自サービスの API 宛てのリクエストにのみアクセストークンを付与する
 if (isAuthEnabled) {
   setupAuthInterceptors(axios, getUserManager, { onSessionExpired: notifySessionExpired });

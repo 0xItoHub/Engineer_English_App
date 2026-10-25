@@ -90,7 +90,7 @@ const ScenesList: React.FC = () => {
                 variant="h6"
                 component="h1"
                 gutterBottom
-                sx={{ fontFamily: 'AB-tsurumaru, Cormorant Garamond, Playfair Display, serif', fontWeight: 400, letterSpacing: 1.2, lineHeight: 1.1 }}
+                sx={{ fontFamily: 'Cormorant Garamond, Playfair Display, serif', fontWeight: 400, letterSpacing: 1.2, lineHeight: 1.1 }}
               >
                 コードは世界を跨ぐ
                 <Typography

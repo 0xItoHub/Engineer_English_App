@@ -30,6 +30,3 @@ export function createDummyClient(): ChatClient {
     },
   };
 }
-
-// 将来の実装例（OpenAI/Bedrock/Ollama）
-// export function createOpenAIClient({ baseUrl, apiKey, model }: { baseUrl?: string; apiKey: string; model: string }): ChatClient { /* ... */ return {} as any } 
