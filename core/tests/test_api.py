@@ -1,7 +1,7 @@
 from unittest import mock
 
 import pytest
-from django.db import OperationalError, connection
+from django.db import IntegrityError, OperationalError, connection
 from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APIClient
 
@@ -427,3 +427,43 @@ def test_progress_list_is_newest_first(auth_client, user, scene):
     body = auth_client.get("/api/progress/").json()
 
     assert [p["id"] for p in body] == [newer.id, older.id]
+
+
+# --- 同時作成時の再試行 -----------------------------------------------------
+
+
+def test_complete_lesson_retries_concurrent_create_as_update(auth_client, user, lesson):
+    """同じ記録が同時に作成された場合は、トランザクションをやり直して既存の記録を更新する。"""
+    calls = []
+
+    def concurrent_create(**kwargs):
+        calls.append(1)
+        if len(calls) == 1:
+            # 別のリクエストが同じ記録を先に作成した場合の一意制約の競合
+            raise IntegrityError("duplicate key value violates unique constraint")
+        raise AssertionError("再試行では作成ではなく更新を行う")
+
+    def other_request_commits(_delay):
+        # 再試行の待機中に、別のリクエストの記録がコミットされた状態を再現する
+        UserProgress(user_sub=user.sub, lesson=lesson, score=90, time_spent=10).save()
+
+    with mock.patch.object(UserProgress.objects, "create", side_effect=concurrent_create):
+        with mock.patch.object(core_db.time, "sleep", side_effect=other_request_commits):
+            res = auth_client.post(
+                COMPLETE_URL, {"lesson_id": lesson.id, "score": 70, "time_spent": 30}
+            )
+
+    assert res.status_code == 200
+    assert len(calls) == 1
+    progress = UserProgress.objects.get(user_sub=user.sub, lesson=lesson)
+    # 最高スコアを保持し、学習時間は最新の値に更新する
+    assert (progress.score, progress.time_spent) == (90, 30)
+
+
+def test_record_progress_does_not_use_get_or_create(auth_client, lesson):
+    with mock.patch.object(
+        UserProgress.objects, "get_or_create", side_effect=AssertionError("unused")
+    ):
+        res = auth_client.post(COMPLETE_URL, {"lesson_id": lesson.id, "score": 70})
+
+    assert res.status_code == 200

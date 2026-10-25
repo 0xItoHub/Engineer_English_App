@@ -187,17 +187,26 @@ class UserProgressViewSet(
 
 
 def _record_progress(user, lesson, score, time_spent):
-    """学習の完了を記録する（最高スコアを保持し、学習時間は最新の値に更新する）。"""
-    progress, created = UserProgress.objects.get_or_create(
-        user_sub=user.sub,
-        lesson=lesson,
-        defaults={"username": user.username, "score": score, "time_spent": time_spent},
-    )
-    if not created:
-        progress.score = max(progress.score, score)
-        progress.time_spent = time_spent
-        progress.username = user.username or progress.username
-        progress.save(update_fields=["score", "time_spent", "username"])
+    """学習の完了を記録する（最高スコアを保持し、学習時間は最新の値に更新する）。
+
+    run_in_transaction_with_retry の中で呼び出す。Aurora DSQL はセーブポイントに対応しないため、
+    get_or_create（作成の競合時にセーブポイントまで戻す）は使わず、検索と作成を分けて行う。
+    同時に同じ記録が作成された場合は一意制約の IntegrityError となり、
+    トランザクション全体をやり直すと既存の記録の更新として成功する。
+    """
+    progress = UserProgress.objects.filter(user_sub=user.sub, lesson=lesson).first()
+    if progress is None:
+        return UserProgress.objects.create(
+            user_sub=user.sub,
+            lesson=lesson,
+            username=user.username,
+            score=score,
+            time_spent=time_spent,
+        )
+    progress.score = max(progress.score, score)
+    progress.time_spent = time_spent
+    progress.username = user.username or progress.username
+    progress.save(update_fields=["score", "time_spent", "username"])
     return progress
 
 

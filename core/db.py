@@ -17,13 +17,21 @@ class RetryExhausted(Exception):
     """再試行しても競合が解消しなかったことを表す。"""
 
 
+def _error_chain(error):
+    """例外と、その原因（__cause__）・処理中に発生した元の例外（__context__）を順に返す。"""
+    seen = set()
+    while error is not None and id(error) not in seen:
+        seen.add(id(error))
+        yield error
+        error = error.__cause__ or error.__context__
+
+
 def _sqlstate(error):
     """例外（Django がラップしたものを含む）から SQLSTATE を取り出す。"""
-    while error is not None:
-        code = getattr(error, "sqlstate", None) or getattr(error, "pgcode", None)
+    for item in _error_chain(error):
+        code = getattr(item, "sqlstate", None) or getattr(item, "pgcode", None)
         if code:
             return code
-        error = error.__cause__
     return None
 
 
@@ -31,7 +39,7 @@ def is_retryable_error(error):
     """同じトランザクションをやり直せば成功しうる競合かどうかを判定する。"""
     if _sqlstate(error) in RETRYABLE_SQLSTATES:
         return True
-    # 同じ行の同時作成（get_or_create の競合）は、やり直すと既存行の更新として成功する
+    # 同じ行の同時作成（一意制約の競合）は、やり直すと既存行の更新として成功する
     return isinstance(error, IntegrityError)
 
 
