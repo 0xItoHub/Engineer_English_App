@@ -20,6 +20,9 @@ import ProgressHistory from "./ProgressHistory";
 import SiteFooter from "./components/SiteFooter";
 import ChatWidget from "./components/ChatWidget";
 import ErrorBoundary from "./components/ErrorBoundary";
+import NotFound from "./components/NotFound";
+import RouteChangeEffects from "./components/RouteChangeEffects";
+import { usePageTitle } from "./hooks/usePageTitle";
 import AppAuthProvider from "./components/AppAuthProvider";
 import AuthControls from "./components/AuthControls";
 import AuthCallback from "./components/AuthCallback";
@@ -31,8 +34,6 @@ import axios from "axios";
 
 // API は Cookie を使わないため、クロスオリジンでも資格情報は送信しない
 axios.defaults.withCredentials = false;
-axios.defaults.xsrfCookieName = "csrftoken";
-axios.defaults.xsrfHeaderName = "X-CSRFToken";
 // ログイン中は自サービスの API 宛てのリクエストにのみアクセストークンを付与する
 if (isAuthEnabled) {
   setupAuthInterceptors(axios, getUserManager, { onSessionExpired: notifySessionExpired });
@@ -40,11 +41,18 @@ if (isAuthEnabled) {
 // 4xx / 5xx を一元的に処理（ログ出力とユーザー向けメッセージの付与）
 setupHttpInterceptors(axios);
 
-// ルーティング部分（画面遷移時にエラー表示をリセット）
+// 準備中のページ（タイトルのみ設定する）
+function PlaceholderPage({ title }: { title: string }) {
+  usePageTitle(title);
+  return <div>{title}（準備中）</div>;
+}
+
+// ルーティング部分（画面遷移時にエラー表示をリセットし、先頭へのスクロールと見出しへのフォーカスを行う）
 function AppRoutes() {
   const location = useLocation();
   return (
     <ErrorBoundary resetKey={location.pathname}>
+      <RouteChangeEffects />
       <Routes>
         <Route path="/" element={<ScenesList />} />
         <Route path="/scene/:id" element={<SceneDetail />} />
@@ -52,9 +60,11 @@ function AppRoutes() {
         <Route path="/progress" element={<ProgressHistory />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
         {/* 体裁用のダミーページ（必要に応じて中身を実装） */}
-        <Route path="/terms" element={<div>利用規約（準備中）</div>} />
-        <Route path="/privacy" element={<div>プライバシーポリシー（準備中）</div>} />
-        <Route path="/contact" element={<div>お問い合わせ（準備中）</div>} />
+        <Route path="/terms" element={<PlaceholderPage title="利用規約" />} />
+        <Route path="/privacy" element={<PlaceholderPage title="プライバシーポリシー" />} />
+        <Route path="/contact" element={<PlaceholderPage title="お問い合わせ" />} />
+        {/* 該当するページが無い URL */}
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </ErrorBoundary>
   );

@@ -4,7 +4,6 @@ import {
   Card,
   CardContent,
   Typography,
-  CircularProgress,
   Box,
   Chip,
   CardActions,
@@ -23,9 +22,11 @@ import AnimatedCodeBackground from "./components/AnimatedCodeBackground";
 import HomeHero from "./components/HomeHero";
 import ContentStats from "./components/ContentStats";
 import TechStack from "./components/TechStack";
-import { readLocalProgress } from "./lib/storage";
-import { useAppAuth } from "./lib/auth";
-import { countContent, mergeProgress, useMyProgressQuery, useScenesQuery, type Scene } from "./lib/queries";
+import { countContent, useScenesQuery, type Scene } from "./lib/queries";
+import { queryView } from "./lib/queryState";
+import { useLearningProgress } from "./hooks/useLearningProgress";
+import { usePageTitle } from "./hooks/usePageTitle";
+import { LoadingView, ProgressErrorAlert, QueryErrorAlert } from "./components/QueryStatus";
 
 // カルーセル用画像（public/images/ 配下に配置してください）
 const heroImages = [
@@ -46,13 +47,13 @@ const slide = keyframes`
 const ScenesList: React.FC = () => {
   const navigate = useNavigate();
   const scenesQuery = useScenesQuery();
-  const progressQuery = useMyProgressQuery();
-  const { isAuthenticated } = useAppAuth();
+  const { query: progressQuery, items: progress } = useLearningProgress();
 
-  // サーバが落ちていても、ローカル進捗だけは表示する（ログイン中はアカウントの進捗を表示する）
   const scenes: Scene[] = scenesQuery.data ?? [];
-  const progress = mergeProgress(progressQuery.data ?? [], isAuthenticated ? [] : readLocalProgress());
-  const loading = scenesQuery.isPending || progressQuery.isPending;
+  const view = queryView(scenesQuery);
+  // ホームはアプリ名のみをタイトルにする
+  usePageTitle(null);
+  const loading = view === "loading" || (view === "ready" && progressQuery.isLoading);
 
   const completedLessonIds = new Set(progress.map(p => p.lesson));
 
@@ -68,11 +69,7 @@ const ScenesList: React.FC = () => {
   };
 
   if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
-        <CircularProgress size={60} aria-label="読み込み中" />
-      </Box>
-    );
+    return <LoadingView />;
   }
 
   return (
@@ -90,7 +87,7 @@ const ScenesList: React.FC = () => {
                 variant="h6"
                 component="h1"
                 gutterBottom
-                sx={{ fontFamily: 'AB-tsurumaru, Cormorant Garamond, Playfair Display, serif', fontWeight: 400, letterSpacing: 1.2, lineHeight: 1.1 }}
+                sx={{ fontFamily: 'Cormorant Garamond, Playfair Display, serif', fontWeight: 400, letterSpacing: 1.2, lineHeight: 1.1 }}
               >
                 コードは世界を跨ぐ
                 <Typography
@@ -143,7 +140,16 @@ const ScenesList: React.FC = () => {
 
         {/* Scene一覧 */}
         <Box id={SCENE_LIST_ID} tabIndex={-1} sx={{ outline: 'none', scrollMarginTop: 16 }}>
-          {scenes.length === 0 ? (
+          {view === "ready" && <ProgressErrorAlert query={progressQuery} sx={{ mt: 0, mb: 3 }} />}
+          {view === "error" || view === "offline" ? (
+            <QueryErrorAlert
+              title="シーン一覧を取得できませんでした"
+              error={scenesQuery.error}
+              offline={view === "offline"}
+              onRetry={() => void scenesQuery.refetch()}
+              sx={{ mt: 0 }}
+            />
+          ) : scenes.length === 0 ? (
             <Paper elevation={1} sx={{ p: 4, textAlign: "center" }}>
               <BookIcon sx={{ fontSize: 60, color: "text.secondary", mb: 2 }} />
               <Typography variant="h6" color="text.secondary" gutterBottom>

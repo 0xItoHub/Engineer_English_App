@@ -1,10 +1,11 @@
 import { vi, type Mocked } from 'vitest';
-import { fireEvent, screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import axios from 'axios';
 import ScenesList from './ScenesList';
-import { LOCAL_PROGRESS_KEY } from './lib/storage';
+import { LOCAL_PROGRESS_KEY, pushLocalProgress } from './lib/storage';
 import { renderWithClient } from './test/renderWithClient';
+import { onlineManager } from '@tanstack/react-query';
 
 vi.mock('axios');
 const mockedAxios = axios as Mocked<typeof axios>;
@@ -45,6 +46,28 @@ test('シーン一覧と進捗（サーバ＋ローカル）を表示する', as
   expect(screen.getByText('100% (2/2)')).toBeInTheDocument();
   expect(screen.getByText('2 フレーズ')).toBeInTheDocument();
   expect(screen.getByRole('progressbar', { name: 'Daily Standup の進捗' })).toHaveAttribute('aria-valuenow', '100');
+});
+
+test('他のユーザーがブラウザに保存した進捗は表示せず、保存した進捗はすぐに反映する', async () => {
+  mockedAxios.get.mockImplementation((url: string) => {
+    if (url.endsWith('/api/scenes/')) return Promise.resolve({ data: scenes });
+    if (url.endsWith('/api/progress/my_progress/')) return Promise.resolve({ data: [] });
+    return Promise.reject(new Error('unexpected'));
+  });
+  window.localStorage.setItem(
+    LOCAL_PROGRESS_KEY,
+    JSON.stringify([
+      { lesson: 10, score: 100, time_spent: 1, owner: 'user-b', completed_at: '2026-01-01T00:00:00.000Z' },
+      { lesson: 11, score: 100, time_spent: 1 },
+    ])
+  );
+
+  renderScenesList();
+
+  expect(await screen.findByText('50% (1/2)')).toBeInTheDocument();
+
+  act(() => pushLocalProgress({ lesson: 10, score: 100, time_spent: 2 }));
+  expect(screen.getByText('100% (2/2)')).toBeInTheDocument();
 });
 
 test('シーン一覧から集計した教材の数（シーン・レッスン・フレーズ・対話）を表示する', async () => {
@@ -91,13 +114,39 @@ test('「学習開始」でシーン詳細へ遷移する', async () => {
   expect(screen.getByText('scene page')).toBeInTheDocument();
 });
 
-test('API に接続できない場合も空の状態を表示する（ローカル進捗が壊れていても落ちない）', async () => {
-  mockedAxios.get.mockRejectedValue(new Error('Network Error'));
+test('API に接続できない場合はエラーと「再試行」を表示し、再試行で一覧を表示する（ローカル進捗が壊れていても落ちない）', async () => {
+  mockedAxios.get.mockRejectedValue({ isAxiosError: true, message: 'Network Error' });
   window.localStorage.setItem(LOCAL_PROGRESS_KEY, '{not json');
 
   renderScenesList();
 
-  expect(await screen.findByText('まだシーンが登録されていません')).toBeInTheDocument();
+  expect(await screen.findByText('サーバーに接続できませんでした。通信環境を確認して、しばらくしてから再度お試しください。')).toBeInTheDocument();
+  expect(screen.getByText('シーン一覧を取得できませんでした')).toBeInTheDocument();
+  expect(screen.queryByText('まだシーンが登録されていません')).not.toBeInTheDocument();
   // 集計できるデータが無いときは教材の数を表示しない
   expect(screen.queryByRole('region', { name: '収録コンテンツ' })).not.toBeInTheDocument();
+
+  mockedAxios.get.mockImplementation((url: string) =>
+    url.endsWith('/api/scenes/') ? Promise.resolve({ data: scenes }) : Promise.resolve({ data: [] })
+  );
+  fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+  expect(await screen.findByText('Daily Standup')).toBeInTheDocument();
+});
+
+test('シーンが 0 件の場合は空の状態を表示する', async () => {
+  mockedAxios.get.mockResolvedValue({ data: [] });
+
+  renderScenesList();
+
+  expect(await screen.findByText('まだシーンが登録されていません')).toBeInTheDocument();
+});
+
+test('オフラインの場合は接続を確認する案内を表示する', async () => {
+  onlineManager.setOnline(false);
+  try {
+    renderScenesList();
+    expect(await screen.findByText('オフラインです。接続を確認してください。')).toBeInTheDocument();
+  } finally {
+    onlineManager.setOnline(true);
+  }
 });
