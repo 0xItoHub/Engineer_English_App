@@ -34,6 +34,7 @@ import NotFound from "./components/NotFound";
 import { LoadingView, QueryErrorAlert } from "./components/QueryStatus";
 import { pushLocalProgress, removeLocalProgressEntry } from "./lib/storage";
 import { useAppAuth } from "./lib/auth";
+import { pickEnglishVoice, utteranceLang } from "./lib/tts";
 import {
   useCompleteLessonMutation,
   useLessonQuery,
@@ -98,25 +99,16 @@ const LessonDetail: React.FC = () => {
     const synth = window.speechSynthesis;
     const loadVoices = () => setVoices(synth.getVoices());
     loadVoices();
-    synth.addEventListener?.("voiceschanged", loadVoices);
-    return () => synth.removeEventListener?.("voiceschanged", loadVoices);
+    // 音声の一覧は非同期に読み込まれるため、読み込み完了の通知で更新する
+    if (typeof synth.addEventListener === "function") {
+      synth.addEventListener("voiceschanged", loadVoices);
+      return () => synth.removeEventListener("voiceschanged", loadVoices);
+    }
+    synth.onvoiceschanged = loadVoices;
+    return () => {
+      if (synth.onvoiceschanged === loadVoices) synth.onvoiceschanged = null;
+    };
   }, []);
-
-  const pickEnglishVoice = () => {
-    if (!voices || voices.length === 0) return undefined;
-    const byName = (kw: string) => voices.find(v => v.name?.toLowerCase().includes(kw));
-    const byLang = (pref: string) => voices.find(v => v.lang?.toLowerCase().startsWith(pref));
-
-    // 自然合成系（Natural/Neural/Onlineなど）を最優先
-    return (
-      byName('natural') ||
-      byName('neural') ||
-      byName('online') ||
-      byLang('en-us') ||
-      byLang('en-gb') ||
-      byLang('en')
-    );
-  };
 
   const resetSpeaking = () => {
     setSpeakingId(null);
@@ -129,17 +121,20 @@ const LessonDetail: React.FC = () => {
     if (!isSpeechSynthesisSupported()) return;
     try {
       const synth = window.speechSynthesis;
-      if (synth.speaking) {
-        synth.cancel();
-      }
+      // 読み上げ中・待機中の音声をすべて止めてから読み上げる
+      synth.cancel();
       const u = new SpeechSynthesisUtterance(text);
-      const voice = pickEnglishVoice();
+      const voice = pickEnglishVoice(voices.length > 0 ? voices : synth.getVoices());
       if (voice) u.voice = voice;
-      u.lang = voice?.lang || "en-US";
+      u.lang = utteranceLang(voice);
       u.rate = speechRate; // 上限は環境で異なります
       u.pitch = 1.0;  // 標準ピッチ
-      u.onend = resetSpeaking;
-      u.onerror = resetSpeaking;
+      // 停止・切り替え済みの読み上げの終了通知では、現在の表示を変えない
+      const finish = () => {
+        if (utteranceRef.current === u) resetSpeaking();
+      };
+      u.onend = finish;
+      u.onerror = finish;
       utteranceRef.current = u;
       setSpeakingId(target.phraseId ?? null);
       setSpeakingDialogueId(target.dialogueId ?? null);
@@ -156,8 +151,7 @@ const LessonDetail: React.FC = () => {
 
   const stopSpeaking = () => {
     try {
-      const synth = window.speechSynthesis;
-      if (synth?.speaking) synth.cancel();
+      window.speechSynthesis?.cancel();
     } catch {
       // 読み上げを停止できない環境では何もしない
     }

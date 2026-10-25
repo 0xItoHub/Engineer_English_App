@@ -1,5 +1,5 @@
 import { vi, type Mocked } from 'vitest';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import axios from 'axios';
 import LessonDetail from './LessonDetail';
@@ -104,6 +104,67 @@ test('音声読み上げ対応の環境では速度を選んで読み上げら�
     expect(speakMock).toHaveBeenCalledTimes(1);
     expect(speakMock.mock.calls[0][0]).toMatchObject({ text: 'I fixed the bug.', rate: 1 });
     expect(screen.getByRole('button', { name: 'I fixed the bug. の読み上げを停止' })).toBeInTheDocument();
+  } finally {
+    const w = window as unknown as Record<string, unknown>;
+    delete w.speechSynthesis;
+    delete w.SpeechSynthesisUtterance;
+  }
+});
+
+test('英語の音声を選んで読み上げ、停止・切り替え済みの読み上げの終了通知では表示を変えない', async () => {
+  const utterances: FakeUtterance[] = [];
+  const englishVoice = { name: 'Microsoft Aria Online (Natural) - English', lang: 'en-US' };
+  let voices: { name: string; lang: string }[] = [];
+  const listeners: Record<string, () => void> = {};
+  const synth = {
+    speaking: false,
+    speak: vi.fn((u: FakeUtterance) => utterances.push(u)),
+    cancel: vi.fn(),
+    getVoices: () => voices,
+    addEventListener: vi.fn((type: string, fn: () => void) => { listeners[type] = fn; }),
+    removeEventListener: vi.fn(),
+  };
+  class FakeUtterance {
+    text: string;
+    rate = 1;
+    lang = '';
+    pitch = 1;
+    voice: unknown = null;
+    onend: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+    constructor(text: string) {
+      this.text = text;
+    }
+  }
+  Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: synth });
+  Object.defineProperty(window, 'SpeechSynthesisUtterance', { configurable: true, value: FakeUtterance });
+
+  try {
+    mockLessonApi();
+    renderLessonDetail();
+    fireEvent.click(await screen.findByRole('button', { name: '次へ' }));
+
+    // 音声の一覧は後から読み込まれる
+    voices = [{ name: 'Microsoft Nanami Online (Natural) - Japanese', lang: 'ja-JP' }, englishVoice];
+    act(() => listeners.voiceschanged?.());
+
+    fireEvent.click(screen.getByRole('button', { name: 'I fixed the bug. を英語で読み上げ' }));
+    expect(synth.cancel).toHaveBeenCalledTimes(1);
+    expect(utterances[0]).toMatchObject({ voice: englishVoice, lang: 'en-US' });
+
+    // 停止してから読み上げ直す
+    fireEvent.click(screen.getByRole('button', { name: 'I fixed the bug. の読み上げを停止' }));
+    fireEvent.click(screen.getByRole('button', { name: 'I fixed the bug. を英語で読み上げ' }));
+    expect(synth.cancel).toHaveBeenCalledTimes(3);
+
+    // 停止した読み上げの終了通知は無視する
+    act(() => utterances[0].onend?.());
+    act(() => utterances[0].onerror?.());
+    expect(screen.getByRole('button', { name: 'I fixed the bug. の読み上げを停止' })).toBeInTheDocument();
+
+    // 現在の読み上げが終わると、読み上げボタンに戻る
+    act(() => utterances[1].onend?.());
+    expect(screen.getByRole('button', { name: 'I fixed the bug. を英語で読み上げ' })).toBeInTheDocument();
   } finally {
     const w = window as unknown as Record<string, unknown>;
     delete w.speechSynthesis;
