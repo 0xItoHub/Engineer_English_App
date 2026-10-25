@@ -116,6 +116,8 @@ aws ssm put-parameter --name "/<project>/django-secret-key" --type SecureString 
 
 ## セキュリティ
 - API Gateway は AWS Shield Standard により自動で DDoS 保護（無料）
+- API は CloudFront 経由のリクエストのみを処理し（オリジン用のカスタムヘッダーで確認）、レート制限は閲覧者の IP アドレス単位で数える（[infra/README.md](infra/README.md) の 8 章）
+- エラー応答は `{"detail": "..."}` 形式の日本語の JSON で返す
 - 本番環境では HTTPS 前提の Cookie・HSTS を有効化し、CORS はフロントエンドのオリジンのみ許可
 - ログインは Amazon Cognito（マネージドログイン、認可コード + PKCE）。API は Bearer のアクセストークンを署名・発行元・有効期限・アプリクライアントの各項目で検証
 - 学習コンテンツは読み取り専用。学習進捗はログインユーザー本人のデータのみ参照・記録できる

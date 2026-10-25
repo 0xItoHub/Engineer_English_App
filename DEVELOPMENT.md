@@ -49,6 +49,19 @@ python manage.py runserver
 - DSQL では主キーを整数の連番（`USE_SEQUENCE_AUTOFIELDS`、キャッシュ 1）で採番し、テーブルはスキーマ `DSQL_SCHEMA`（既定 `app`）に作成します。
 - `core/migrations/0001_initial.py` は、参照先のテーブルから順に外部キーを含めて作成する構成です。モデルを変更するときは、DSQL の制約（列の型変更や既存テーブルへの NOT NULL 外部キー追加は不可、1 トランザクションの変更は 3,000 行まで）に収まるマイグレーションにしてください。
 - 同時更新の競合（SQLSTATE `40001` / `OC000` / `OC001`）は `core/db.py` の `run_in_transaction_with_retry()` でトランザクションごと再試行します。
+- DSQL はセーブポイントに対応しないため、トランザクション内では `get_or_create()` を使わず、検索（`filter().first()`）と作成（`create()`）を分けて書きます。同時作成による一意制約の競合（`IntegrityError`）も上記の再試行で処理します。
+- 一覧の並び順はモデルの `Meta.ordering`（ID 順など）で固定しています。並び順のみの変更は SQL を発行しないマイグレーション（`AlterModelOptions`）になります。
+
+### エラー応答
+
+- API のエラーは `{"detail": "..."}` 形式の日本語の JSON で返します（`LANGUAGE_CODE = "ja"`、`core/exceptions.py`）。入力エラーは `detail` に加えて項目ごとの内訳を `errors` に入れます。
+- データベースに接続できない場合は 503、想定外の例外は 500 を返し、例外の内容はログ（メソッドとパスのみ）に記録します。
+- DRF を通らないパス（未定義の URL など）も `handler404` などで同じ形式の JSON を返します。
+
+### CloudFront 経由のリクエストの確認
+
+本番では `ORIGIN_VERIFY_SECRET` が設定され、`core.middleware.OriginVerifyMiddleware` が CloudFront からのリクエストかを確認し、閲覧者の IP アドレス（`X-Viewer-IP`）を `REMOTE_ADDR` に設定します（詳細は [infra/README.md](infra/README.md) の 8 章）。
+ローカル開発・テストでは未設定のため、確認は行いません。
 
 ### ユーザーの識別
 
