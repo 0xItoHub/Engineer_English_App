@@ -514,7 +514,9 @@ GRANT USAGE ON SCHEMA app TO app_rw;
 SELECT pg_role_name, arn FROM sys.iam_pg_role_mappings ORDER BY pg_role_name;
 ```
 
-この時点で Web 用の IAM ロールは `app` と `app_rw` の両方に対応付けられ、`app` での接続を続けます。
+この時点で Web 用の IAM ロールは `app` と `app_rw` の両方に対応付けられ、`app` での接続を続けます（1 つの IAM ロールを複数のデータベースロールに対応付けられます）。
+
+IAM の対応付けは反映までに数十秒かかることがあります。直後に管理専用の Lambda の接続が `access denied` になる場合は、少し待ってから再実行します。
 
 **手順 3. 既存のテーブルに権限を付与する（管理専用の Lambda）**
 
@@ -525,18 +527,29 @@ aws lambda invoke --function-name "$MIGRATOR" --cli-binary-format raw-in-base64-
   --payload '{"manage":"check"}' /dev/stdout
 ```
 
-`admin` で付与の結果を確認します（各テーブルに `DELETE, INSERT, SELECT, UPDATE` が並び、スキーマの `CREATE` 権限が無いこと）。
+`admin` で付与の結果を確認します（各テーブルで SELECT / INSERT / UPDATE / DELETE が `true`、TRUNCATE とスキーマの `CREATE` が `false` であること）。Aurora DSQL では `information_schema.role_table_grants` から他のロールの権限を参照できないため、`has_table_privilege` / `has_sequence_privilege` で確認します。
 
 ```sql
-SELECT table_name, string_agg(privilege_type, ', ' ORDER BY privilege_type) AS privileges
-  FROM information_schema.role_table_grants
- WHERE grantee = 'app_rw' AND table_schema = 'app'
- GROUP BY table_name ORDER BY table_name;
+SELECT c.relname AS table_name,
+       has_table_privilege('app_rw', c.oid, 'SELECT')   AS sel,
+       has_table_privilege('app_rw', c.oid, 'INSERT')   AS ins,
+       has_table_privilege('app_rw', c.oid, 'UPDATE')   AS upd,
+       has_table_privilege('app_rw', c.oid, 'DELETE')   AS del,
+       has_table_privilege('app_rw', c.oid, 'TRUNCATE') AS trunc   -- false であること
+  FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+ WHERE n.nspname = 'app' AND c.relkind = 'r'
+ ORDER BY 1;
+SELECT c.relname AS sequence_name, has_sequence_privilege('app_rw', c.oid, 'USAGE') AS usage
+  FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+ WHERE n.nspname = 'app' AND c.relkind = 'S'
+ ORDER BY 1;
 SELECT has_schema_privilege('app_rw', 'app', 'USAGE')  AS usage,
        has_schema_privilege('app_rw', 'app', 'CREATE') AS create;   -- usage=true, create=false
 -- public スキーマにもオブジェクトを作成できないこと（false であること）
 SELECT has_schema_privilege('app_rw', 'public', 'CREATE') AS public_create;
 ```
+
+なお、Aurora DSQL は `SET ROLE` に対応していないため、`admin` から `app_rw` に切り替えて書き込みを試すことはできません。書き込みの確認は、手順 5 でログインした状態での学習完了（進捗の保存）で行います。
 
 **手順 4. Web 用の Lambda を `app_rw` に切り替える**
 
