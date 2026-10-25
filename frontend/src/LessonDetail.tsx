@@ -12,7 +12,6 @@ import {
   Step,
   StepLabel,
   LinearProgress,
-  Container,
   Chip,
   Snackbar,
   IconButton,
@@ -348,7 +347,8 @@ const LessonContent: React.FC<{ lessonId: string | undefined }> = ({ lessonId })
   } as const;
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+    // 幅と余白はメイン領域（App の Container）に合わせる
+    <Box>
       {/* ヘッダー */}
       <Box sx={{ mb: 3 }}>
         <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(backPath)} sx={{ mb: 2 }}>
@@ -582,7 +582,7 @@ const LessonContent: React.FC<{ lessonId: string | undefined }> = ({ lessonId })
           {notice?.message}
         </Alert>
       </Snackbar>
-    </Container>
+    </Box>
   );
 };
 

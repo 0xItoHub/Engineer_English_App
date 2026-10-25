@@ -12,7 +12,6 @@ import {
   List,
   ListItem,
   ListItemText,
-  Container
 } from "@mui/material";
 import { 
   PlayArrow as PlayIcon,
@@ -85,7 +84,8 @@ const SceneDetail: React.FC = () => {
   const paginated = lessons.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+    // 幅と余白はメイン領域（App の Container）に合わせる
+    <Box>
       {/* ヘッダー */}
       <Box sx={{ mb: 3 }}>
         <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/")} sx={{ mb: 2 }}>
@@ -173,7 +173,7 @@ const SceneDetail: React.FC = () => {
           </CardContent>
         </Card>
       </Box>
-    </Container>
+    </Box>
   );
 };
 

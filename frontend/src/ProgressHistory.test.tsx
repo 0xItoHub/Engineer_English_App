@@ -116,3 +116,34 @@ test('学習履歴を取得できない場合はエラーと「再試行」を�
   fireEvent.click(screen.getByRole('button', { name: '再試行' }));
   expect(await screen.findByText('まだ学習履歴がありません')).toBeInTheDocument();
 });
+
+test('スマートフォンの幅では学習履歴を表ではなくカードの一覧で表示する', async () => {
+  const original = window.matchMedia;
+  // 幅の上限を指定したメディアクエリ（スマートフォン向け）に一致させる
+  window.matchMedia = ((query: string) => ({
+    matches: query.includes('max-width'),
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  })) as typeof window.matchMedia;
+  try {
+    mockApi([{ id: 1, lesson: 10, lesson_title: 'Yesterday', scene_title: 'Daily Standup', completed_at: SERVER_DATE, score: 100, time_spent: 90 }]);
+
+    renderHistory();
+
+    const list = await screen.findByRole('list', { name: '学習履歴一覧' });
+    const items = within(list).getAllByRole('listitem');
+    expect(items).toHaveLength(1);
+    expect(within(items[0]).getByText('Yesterday')).toBeInTheDocument();
+    expect(within(items[0]).getByText('Daily Standup')).toBeInTheDocument();
+    expect(within(items[0]).getByText(formatted(SERVER_DATE))).toBeInTheDocument();
+    expect(within(items[0]).getByText('1分30秒')).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  } finally {
+    window.matchMedia = original;
+  }
+});
