@@ -255,8 +255,6 @@ terraform -chdir=infra output -raw cognito_authority
 
 デザインを調整する場合は、Cognito コンソールの「マネージドログイン」→ スタイルの編集画面で見た目を確認し、`DescribeManagedLoginBrandingByClient`（`ReturnMergedResources=true`）で取得した `Settings` から必要な項目を `cognito_branding.json` に反映すると、Terraform の設定と画面を一致させられます。
 
-## 8. セキュリティヘッダーと Content Security Policy（CSP）
-
 ## 8. CloudFront 経由のリクエストの確認とレート制限
 
 API は CloudFront の `/api/*` から配信します。CloudFront と API（Django）の間で次の 2 つのヘッダーを使います。
