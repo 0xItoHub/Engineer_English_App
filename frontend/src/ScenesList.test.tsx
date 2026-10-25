@@ -103,6 +103,26 @@ test('概要・技術スタックを表示し、「学習をはじめる」で�
   expect(document.getElementById('scene-list')).toHaveFocus();
 });
 
+test('カルーセルの画像は WebP を優先し、大きさの指定と遅延読み込みを行う', async () => {
+  mockedAxios.get.mockImplementation((url: string) =>
+    url.endsWith('/api/scenes/') ? Promise.resolve({ data: scenes }) : Promise.reject(new Error('403'))
+  );
+
+  const { container } = renderScenesList();
+  await screen.findByText('Daily Standup');
+
+  const images = Array.from(container.querySelectorAll('picture img'));
+  expect(images).toHaveLength(6);
+  expect(container.querySelector('picture source')).toHaveAttribute('type', 'image/webp');
+  expect(images[0]).toHaveAttribute('loading', 'eager');
+  for (const img of images) {
+    expect(img).toHaveAttribute('width', '1170');
+    expect(img).toHaveAttribute('height', '780');
+    expect(img).toHaveAttribute('decoding', 'async');
+  }
+  expect(images.slice(1).every((img) => img.getAttribute('loading') === 'lazy')).toBe(true);
+});
+
 test('「学習開始」でシーン詳細へ遷移する', async () => {
   mockedAxios.get.mockImplementation((url: string) =>
     url.endsWith('/api/scenes/') ? Promise.resolve({ data: scenes }) : Promise.reject(new Error('403'))

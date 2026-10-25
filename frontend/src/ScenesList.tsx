@@ -28,12 +28,11 @@ import { usePageTitle } from "./hooks/usePageTitle";
 import { LoadingView, ProgressErrorAlert, QueryErrorAlert } from "./components/QueryStatus";
 import { DISPLAY_FONT_FAMILY } from "./theme";
 
-// カルーセル用画像（public/images/ 配下に配置してください）
-const heroImages = [
-  "/images/engineer_01.jpeg",
-  "/images/engineer_02.jpeg",
-  "/images/engineer_03.jpeg",
-];
+// カルーセル用画像（public/images/ 配下。WebP に対応したブラウザでは WebP、それ以外では JPEG を表示する）
+const heroImages = ["/images/engineer_01", "/images/engineer_02", "/images/engineer_03"];
+// 画像の元の大きさ（表示前に縦横比を確保して、読み込み時のレイアウトのずれを防ぐ）
+const HERO_IMAGE_WIDTH = 1170;
+const HERO_IMAGE_HEIGHT = 780;
 
 // シーン一覧の要素 ID（「学習をはじめる」の移動先）
 const SCENE_LIST_ID = "scene-list";
@@ -113,14 +112,25 @@ const ScenesList: React.FC = () => {
                 '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
               }}
             >
-              {[...heroImages, ...heroImages].map((src, idx) => (
+              {[...heroImages, ...heroImages].map((base, idx) => (
                 <Box
                   key={idx}
-                  component="img"
-                  src={src}
-                  alt=""
-                  sx={{ width: `${100 / (heroImages.length * 2)}%`, height: CAROUSEL_HEIGHT, objectFit: 'cover' }}
-                />
+                  component="picture"
+                  sx={{ display: 'block', flex: 'none', width: `${100 / (heroImages.length * 2)}%`, height: CAROUSEL_HEIGHT }}
+                >
+                  <source srcSet={`${base}.webp`} type="image/webp" />
+                  <Box
+                    component="img"
+                    src={`${base}.jpeg`}
+                    alt=""
+                    width={HERO_IMAGE_WIDTH}
+                    height={HERO_IMAGE_HEIGHT}
+                    // 最初に表示される画像以外は、表示位置に近づいてから読み込む
+                    loading={idx === 0 ? "eager" : "lazy"}
+                    decoding="async"
+                    sx={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                </Box>
               ))}
             </Box>
           </Box>
