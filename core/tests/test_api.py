@@ -113,16 +113,16 @@ def test_anonymous_write_is_rejected(api_client, content, resource):
     obj = content[resource]
     base = f"/api/{resource}s/"
 
-    assert api_client.post(base, {"title": "x"}, format="json").status_code in (403, 405)
+    assert api_client.post(base, {"title": "x"}, format="json").status_code in (401, 405)
     assert api_client.put(f"{base}{obj.id}/", {"title": "x"}, format="json").status_code in (
-        403,
+        401,
         405,
     )
     assert api_client.patch(f"{base}{obj.id}/", {"title": "x"}, format="json").status_code in (
-        403,
+        401,
         405,
     )
-    assert api_client.delete(f"{base}{obj.id}/").status_code in (403, 405)
+    assert api_client.delete(f"{base}{obj.id}/").status_code in (401, 405)
     assert type(obj).objects.filter(id=obj.id).exists()
 
 
@@ -144,7 +144,8 @@ def test_content_is_read_only_for_authenticated_user(auth_client, content, resou
 def test_progress_list_requires_login(api_client, user, lesson):
     make_progress(user, lesson, score=60)
 
-    assert api_client.get("/api/progress/").status_code == 403
+    # 未ログインは 401（Bearer トークンでの認証を求める）
+    assert api_client.get("/api/progress/").status_code == 401
 
 
 def test_progress_list_returns_only_own_records(auth_client, user, lesson):

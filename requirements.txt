@@ -8,3 +8,6 @@ aurora-dsql-django==0.7.0
 aurora-dsql-python-connector[psycopg]==0.2.7
 psycopg[binary]==3.3.6
 psycopg-pool==3.3.3
+# Cognito のアクセストークン（JWT）の署名検証
+PyJWT[crypto]==2.15.1
+cryptography==50.0.2
