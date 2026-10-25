@@ -369,7 +369,7 @@ const LessonContent: React.FC<{ lessonId: string | undefined }> = ({ lessonId })
       <Box sx={{ mb: 3 }}>
         <PageBreadcrumbs items={[{ label: sceneTitle, to: backPath }, { label: lesson.title }]} />
         <Paper elevation={0} sx={{ p: 3, backgroundColor: "#f5f5f5" }}>
-          <Typography variant="h4" component="h1" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Typography variant="h4" component="h1" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1, fontSize: { xs: "1.625rem", sm: "2.125rem" } }}>
             <MenuBookIcon color="primary" fontSize="large" aria-hidden="true" />
             {lesson.title}
           </Typography>

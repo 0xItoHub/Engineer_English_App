@@ -25,7 +25,7 @@ const LegalLayout: React.FC<LayoutProps> = ({ title, Icon, children }) => {
   usePageTitle(title);
   return (
     <Paper elevation={1} component="article" sx={{ p: { xs: 2.5, sm: 4 }, maxWidth: 860, mx: "auto" }}>
-      <Typography variant="h4" component="h1" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+      <Typography variant="h4" component="h1" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1, fontSize: { xs: "1.625rem", sm: "2.125rem" } }}>
         <Icon color="primary" fontSize="large" aria-hidden="true" />
         {title}
       </Typography>
@@ -65,8 +65,7 @@ const IssuesLink: React.FC<{ children?: React.ReactNode }> = ({ children }) => (
 export const PrivacyPolicy: React.FC = () => (
   <LegalLayout title="プライバシーポリシー" Icon={PrivacyTipIcon}>
     <Typography variant="body1">
-      Engineer English App（以下「本サービス」）は、個人が開発・運営する英語学習サービスです。
-      本サービスで取り扱う情報と、その利用目的は次のとおりです。
+      Engineer English App（以下「本サービス」）は、個人が開発・運営する英語学習サービスです。本サービスで取り扱う情報と、その利用目的は次のとおりです。
     </Typography>
 
     <Section title="1. 取得する情報">
@@ -100,15 +99,13 @@ export const PrivacyPolicy: React.FC = () => (
 
     <Section title="4. 第三者への提供">
       <Typography variant="body1">
-        取得した情報を販売したり、第三者に提供したりすることはありません。
-        ただし、本サービスの運営に必要な範囲で、AWS のクラウドサービス上で情報を処理・保存します。
+        取得した情報を販売したり、第三者に提供したりすることはありません。ただし、本サービスの運営に必要な範囲で、AWS のクラウドサービス上で情報を処理・保存します。
       </Typography>
     </Section>
 
     <Section title="5. アカウント・データの削除">
       <Typography variant="body1">
-        アカウントや学習の記録の削除を希望される場合は、<IssuesLink />からご連絡ください。
-        Issues は公開されるため、メールアドレスなどの個人情報は書き込まないでください。対応の方法は Issue 上でご案内します。
+        アカウントや学習の記録の削除を希望される場合は、<IssuesLink />からご連絡ください。Issues は公開されるため、メールアドレスなどの個人情報は書き込まないでください。対応の方法は Issue 上でご案内します。
       </Typography>
       <Typography variant="body1">
         ブラウザに保存された情報は、ブラウザのサイトデータを削除することで消去できます。
@@ -139,8 +136,7 @@ export const Terms: React.FC = () => (
 
     <Section title="2. 無保証">
       <Typography variant="body1">
-        本サービスは現状のまま提供します。内容の正確性・完全性や、継続して利用できることを保証するものではありません。
-        本サービスの利用によって生じた損害について、運営者は責任を負いません。
+        本サービスは現状のまま提供します。内容の正確性・完全性や、継続して利用できることを保証するものではありません。本サービスの利用によって生じた損害について、運営者は責任を負いません。
       </Typography>
     </Section>
 
