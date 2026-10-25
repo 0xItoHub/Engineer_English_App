@@ -9,7 +9,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import AuthControls from './AuthControls';
 import AppAuthProvider from './AppAuthProvider';
 import AuthSessionEffects from './AuthSessionEffects';
-import { pageNavigation } from '../lib/auth';
+import { notifySessionExpired, pageNavigation } from '../lib/auth';
 import { queryKeys, useMyProgressQuery } from '../lib/queries';
 import { pushLocalProgress, readLocalProgress } from '../lib/storage';
 import { createTestQueryClient, renderWithClient } from '../test/renderWithClient';
@@ -237,5 +237,74 @@ describe('ログイン直後の進捗の反映', () => {
     await Promise.resolve();
     expect(mockedAxios.post).not.toHaveBeenCalled();
     expect(readLocalProgress()).toHaveLength(1);
+  });
+
+  test('他のユーザーがブラウザに保存した進捗はアカウントへ送信しない', async () => {
+    pushLocalProgress({ lesson: 1, score: 100, time_spent: 10, owner: 'user-b' });
+    pushLocalProgress({ lesson: 2, score: 100, time_spent: 20, owner: 'user-a' });
+    mockedAxios.post.mockResolvedValue({ data: {} });
+    const notice = vi.fn();
+
+    renderWithClient(withAuth(signedIn('user-a', 'a@example.test'), <AuthSessionEffects onNotice={notice} />));
+
+    await waitFor(() => expect(notice).toHaveBeenCalledTimes(1));
+    expect(mockedAxios.post).toHaveBeenCalledTimes(1);
+    expect(mockedAxios.post.mock.calls[0][1]).toEqual({ lesson_id: '2', score: 100, time_spent: 20 });
+    expect(readLocalProgress()).toEqual([expect.objectContaining({ lesson: 1, owner: 'user-b' })]);
+  });
+});
+
+describe('ログインの有効期限切れの通知', () => {
+  function eventsMock() {
+    const handlers: Record<string, (() => void)[]> = { expired: [], renewError: [] };
+    const remove = vi.fn();
+    const events = {
+      addAccessTokenExpired: vi.fn((cb: () => void) => {
+        handlers.expired.push(cb);
+        return remove;
+      }),
+      addSilentRenewError: vi.fn((cb: () => void) => {
+        handlers.renewError.push(cb);
+        return remove;
+      }),
+    } as unknown as AuthContextProps['events'];
+    return { events, handlers, remove };
+  }
+
+  test('トークンの期限切れ・自動更新の失敗・API の 401 のいずれでも、通知は 1 回だけ表示する', () => {
+    const { events, handlers, remove } = eventsMock();
+    const notice = vi.fn();
+    const view = renderWithClient(withAuth(signedIn('user-a', 'a@example.test', { events }), <AuthSessionEffects onNotice={notice} />));
+
+    act(() => {
+      handlers.expired.forEach((cb) => cb());
+      handlers.renewError.forEach((cb) => cb());
+      handlers.expired.forEach((cb) => cb());
+      notifySessionExpired();
+    });
+
+    expect(notice).toHaveBeenCalledTimes(1);
+    expect(notice.mock.calls[0][0]).toEqual({
+      severity: 'warning',
+      message: 'ログインの有効期限が切れました。お手数ですが、もう一度ログインしてください。',
+    });
+
+    view.unmount();
+    expect(remove).toHaveBeenCalledTimes(2);
+  });
+
+  test('ログインし直した後に期限が切れた場合は、改めて通知する', () => {
+    const { events, handlers } = eventsMock();
+    const notice = vi.fn();
+    const view = renderWithClient(withAuth(signedIn('user-a', 'a@example.test', { events }), <AuthSessionEffects onNotice={notice} />));
+    act(() => handlers.expired.forEach((cb) => cb()));
+    expect(notice).toHaveBeenCalledTimes(1);
+
+    const rerenderWith = (value: AuthContextProps) =>
+      view.rerender(<QueryClientProvider client={view.client}>{withAuth(value, <AuthSessionEffects onNotice={notice} />)}</QueryClientProvider>);
+    rerenderWith(authValue({ events }));
+    rerenderWith(signedIn('user-a', 'a@example.test', { events }));
+    act(() => handlers.expired.forEach((cb) => cb()));
+    expect(notice).toHaveBeenCalledTimes(2);
   });
 });
