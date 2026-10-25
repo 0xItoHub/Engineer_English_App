@@ -1,4 +1,5 @@
 import time
+import urllib.error
 
 import jwt
 import pytest
@@ -200,3 +201,62 @@ def test_rejected_token_does_not_write_progress(signing_key, lesson):
 
     assert res.status_code == 401
     assert not UserProgress.objects.exists()
+
+
+# --- 公開鍵を取得できない場合 -------------------------------------------------
+
+
+class _UnreachableJwkClient:
+    """公開鍵の取得に失敗する JWKS クライアント。"""
+
+    def __init__(self, error):
+        self._error = error
+
+    def get_signing_key_from_jwt(self, token):
+        jwt.get_unverified_header(token)
+        raise self._error
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        jwt.PyJWKClientConnectionError("Fail to fetch data from the url"),
+        TimeoutError("timed out"),
+        urllib.error.URLError("unreachable"),
+        ConnectionResetError("reset"),
+    ],
+)
+def test_jwks_outage_returns_503(monkeypatch, signing_key, lesson, error):
+    monkeypatch.setattr(authentication, "_jwk_client", lambda url: _UnreachableJwkClient(error))
+
+    res = bearer_client(make_token(signing_key)).post(
+        COMPLETE_URL, {"lesson_id": lesson.id, "score": 90}, format="json"
+    )
+
+    assert res.status_code == 503
+    assert res.json()["detail"].startswith("認証サービスに一時的に接続できません")
+    assert not UserProgress.objects.exists()
+
+
+def test_unknown_kid_is_still_rejected_with_401(monkeypatch, signing_key):
+    error = jwt.PyJWKClientError('Unable to find a signing key that matches: "test-kid"')
+    monkeypatch.setattr(authentication, "_jwk_client", lambda url: _UnreachableJwkClient(error))
+
+    res = bearer_client(make_token(signing_key)).get(MY_PROGRESS_URL)
+
+    assert res.status_code == 401
+
+
+def test_real_jwk_client_connection_failure_returns_503(monkeypatch, signing_key):
+    # 実際の PyJWKClient が接続エラーを PyJWKClientConnectionError として送出する場合
+    client = jwt.PyJWKClient("https://jwks.invalid/.well-known/jwks.json", timeout=1)
+
+    def unreachable(*args, **kwargs):
+        raise urllib.error.URLError("unreachable")
+
+    monkeypatch.setattr("urllib.request.OpenerDirector.open", unreachable)
+    monkeypatch.setattr(authentication, "_jwk_client", lambda url: client)
+
+    res = bearer_client(make_token(signing_key)).get(MY_PROGRESS_URL)
+
+    assert res.status_code == 503

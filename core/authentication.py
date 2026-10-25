@@ -6,11 +6,12 @@
 トークンの sub を持つ ExternalUser を request.user とする。ヘッダーがなければ未ログインとして扱う。
 """
 
+import logging
 import os
 from functools import lru_cache
 
 import jwt
-from rest_framework import authentication, exceptions
+from rest_framework import authentication, exceptions, status
 
 from .auth import ExternalUser
 
@@ -20,6 +21,16 @@ ALLOWED_ALGORITHMS = ["RS256"]
 CLOCK_SKEW_SECONDS = 30
 # 公開鍵の取得のタイムアウト（秒）
 JWKS_TIMEOUT_SECONDS = 5
+
+logger = logging.getLogger(__name__)
+
+
+class AuthServiceUnavailable(exceptions.APIException):
+    """公開鍵（JWKS）を取得できず、トークンを検証できないことを表す（503）。"""
+
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    default_detail = "認証サービスに一時的に接続できません。しばらくしてから再度お試しください。"
+    default_code = "auth_service_unavailable"
 
 
 def cognito_settings(environ=None):
@@ -53,9 +64,21 @@ def _invalid_token():
 
 
 def verify_access_token(token, config):
-    """アクセストークンを検証し、クレームを返す。無効なら AuthenticationFailed を送出する。"""
+    """アクセストークンを検証し、クレームを返す。
+
+    トークンが無効なら AuthenticationFailed（401）を、
+    公開鍵を取得できない場合は AuthServiceUnavailable（503）を送出する。
+    """
     try:
         signing_key = _jwk_client(config["jwks_url"]).get_signing_key_from_jwt(token)
+    except (jwt.PyJWKClientConnectionError, OSError) as error:
+        # 公開鍵の取得時の通信エラー・タイムアウトは、トークンの不正ではなく一時的な障害として扱う
+        logger.warning("認証用の公開鍵を取得できませんでした: %s", type(error).__name__)
+        raise AuthServiceUnavailable() from error
+    except (jwt.PyJWTError, jwt.PyJWKClientError) as error:
+        raise _invalid_token() from error
+
+    try:
         claims = jwt.decode(
             token,
             signing_key.key,
@@ -68,7 +91,7 @@ def verify_access_token(token, config):
                 "verify_aud": False,
             },
         )
-    except (jwt.PyJWTError, jwt.PyJWKClientError) as error:
+    except jwt.PyJWTError as error:
         raise _invalid_token() from error
 
     if claims.get("token_use") != "access" or claims.get("client_id") != config["client_id"]:
