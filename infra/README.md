@@ -12,6 +12,7 @@
 | `manage_lambda_log_group` | `false` | Lambda ロググループ `/aws/lambda/<function_name>` の保持期間設定（`log_retention_days`、既定 30 日） |
 | `manage_ecr_lifecycle` | `false` | ECR リポジトリ（`ecr_repository_name`、既定 `ee-backend`）のライフサイクルポリシー |
 | `enable_backup` | `false` | AWS Backup の保管庫 `<project_name>-dsql-backup`、毎日のバックアッププラン、Aurora DSQL クラスターの選択、AWS Backup 用 IAM ロール `<project_name>-backup`（[10 章](#10-aurora-dsql-のバックアップと復元)） |
+| `chat_provider` | `"disabled"` | 指定した接続先の AI チャット。Web 用の Lambda の `CHAT_*` 環境変数、API キーの読み取り（`chat_api_key_ssm_param_name` 指定時）・Bedrock の呼び出し（`bedrock` の場合）の IAM ポリシー（[12 章](#12-ai-チャットの有効化)） |
 
 > Terraform の実行（`plan` / `apply`）は従来どおり手元から手動で行います。GitHub Actions のデプロイロールにはインフラ変更や state へのアクセス権限は含めていません。
 
@@ -187,8 +188,9 @@ ECR リポジトリ自体はこの構成の管理外のため、ポリシーの�
 | CloudFront 無効化 | 月 1,000 パスまで無料（`/*` は 1 パスとして計上） |
 | Aurora DSQL のバックアップ（AWS Backup） | ウォームストレージ $0.12/GB・月（東京）。数百 KB のデータを 14 日分保持しても $0.01 未満（[10 章](#10-aurora-dsql-のバックアップと復元)） |
 | 管理専用の Lambda（migrator） | 呼び出したときのみ課金（運用操作の頻度では無料枠内） |
+| AI チャット（`chat_provider`） | 接続先の従量課金。既定の上限（全体 200 回/日）で Bedrock の Nova Micro は最大 約 $1.8、Gemini API（有料枠）は最大 約 $17。Gemini API の無料枠は $0（[12-7](#12-7-費用の目安)） |
 
-すべて有効にしても、追加費用は月額 $1 未満が目安です。
+AI チャットを除き、すべて有効にしても追加費用は月額 $1 未満が目安です。
 
 ## 6. Aurora DSQL の初期設定（初回のみ）
 
@@ -595,3 +597,160 @@ SELECT pg_role_name, arn FROM sys.iam_pg_role_mappings ORDER BY pg_role_name;
 
 - モデルの変更時は、デプロイ後に管理専用の Lambda で `{"manage":"migrate"}` を実行します（テーブル作成に続けて `app_rw` への権限付与も行います）。
 - 学習データの投入（`seed`）も管理専用の Lambda で実行します。
+
+## 12. AI チャットの有効化
+
+右下のチャットは、既定では入力内容をそのまま返すデモとして動作します（`chat_provider = "disabled"`。外部の API は呼び出さず、費用は発生しません）。
+`terraform.tfvars` で接続先を指定すると、ログインしたユーザーが仕事で使う英語について AI に質問できるようになります。
+
+- ブラウザは自サービスの `/api/chat/` とのみ通信し、AI（LLM）の呼び出しは Web 用の Lambda から行います（CSP の `connect-src` は変更しません）。
+- 質問はログインが必要です。1 ユーザーあたり・全体の 1 日（日本時間）の回数の上限をデータベース（`core_chatusage`）で管理し、AI を呼び出す前に 1 回分を確保します（AI の呼び出しが失敗しても回数は戻しません）。
+- チャットの内容はデータベース・ログに保存しません。ログには接続先の名前・結果・HTTP ステータス・所要時間のみを記録します。
+- API キーは SSM Parameter Store の SecureString に保存し、Terraform には **パラメータ名のみ** を渡します（キーの値は tfvars・state・環境変数に含まれません）。
+
+| 変数（`terraform.tfvars`） | 既定値 | 内容 |
+| --- | --- | --- |
+| `chat_provider` | `"disabled"` | `disabled` / `gemini` / `openai_compatible` / `bedrock` |
+| `chat_model` | `""` | モデル名（空ならアプリの既定値: `gemini` は `gemini-3.5-flash-lite`、`bedrock` は `apac.amazon.nova-micro-v1:0`） |
+| `chat_api_base_url` | `""` | `openai_compatible` の接続先（`/chat/completions` の手前まで） |
+| `chat_api_key_ssm_param_name` | `""` | API キーの SSM パラメータ名（`gemini` / `openai_compatible`）。指定すると `ssm:GetParameter` の権限が追加される |
+| `chat_bedrock_resource_arns` | `[]` | `bedrock` で呼び出しを許可するモデル・推論プロファイルの ARN（`bedrock:InvokeModel` の対象） |
+| `chat_max_input_chars` | `500` | 質問 1 件の最大文字数 |
+| `chat_max_output_tokens` | `300` | 回答の最大トークン数 |
+| `chat_max_history` | `6` | 1 回の質問で送る会話の履歴の最大件数（質問と回答の合計） |
+| `chat_user_daily_limit` | `20` | 1 ユーザーあたりの 1 日の回数 |
+| `chat_global_daily_limit` | `200` | 全ユーザー合計の 1 日の回数（費用の上限の目安） |
+| `chat_timeout_seconds` | `20` | AI の応答を待つ時間（秒、1〜25。API Gateway の 30 秒より短くする） |
+| `chat_throttle_rate` | `"6/min"` | 1 ユーザーあたりの短時間の回数（Lambda のインスタンス単位） |
+
+`chat_provider` が `disabled` の場合、Lambda の環境変数・IAM ポリシーは追加されないため、`terraform plan` は差分なしのままです。
+
+### 12-1. 共通の準備（最初の 1 回のみ）
+
+1. このリポジトリの変更を `main` にマージし、GitHub Actions のデプロイで Web 用・管理専用の Lambda のイメージを更新します（この時点ではチャットは無効のまま）。
+2. 利用回数のテーブル（`core_chatusage`）を作成します。テーブルの作成と `app_rw` への権限付与は管理専用の Lambda で行います。
+
+```bash
+cd infra
+MIGRATOR=$(terraform output -raw migrator_function_name)
+aws lambda invoke --function-name "$MIGRATOR" --cli-binary-format raw-in-base64-out \
+  --payload '{"manage":"migrate"}' /dev/stdout
+```
+
+テーブルを作成する前にチャットを有効にすると、質問時にデータベースのエラーになります。必ず先に `migrate` を実行してください。
+
+### 12-2. Gemini API（Google）
+
+1. [Google AI Studio](https://aistudio.google.com/) で API キーを発行します。
+2. キーを SSM の SecureString に保存します（画面・シェルの履歴に値を残さないよう、`read -s` で入力します）。
+
+```bash
+read -s "KEY?API キー: " && aws ssm put-parameter --name /ee-sqlite-demo/chat-api-key --type SecureString --value "$KEY" && unset KEY
+```
+
+> bash の場合は `read -s -p "API キー: " KEY && ...` と入力します。キーを更新する場合は `--overwrite` を付けて実行し、Lambda の実行環境が入れ替わった後（関数の設定の更新やデプロイの後）に新しいキーが使われます。
+
+3. `terraform.tfvars` に追加して適用します。
+
+```hcl
+chat_provider               = "gemini"
+chat_api_key_ssm_param_name = "/ee-sqlite-demo/chat-api-key"
+# chat_model                = "gemini-3.5-flash-lite"  # 省略時の既定値
+```
+
+```bash
+terraform plan    # Web 用の Lambda への CHAT_* 環境変数の追加と、IAM ポリシー <project_name>-read-chat-api-key の追加であることを確認
+terraform apply
+```
+
+### 12-3. OpenAI 互換の API（OpenAI・Groq など）
+
+Chat Completions API（`POST <base_url>/chat/completions`、`Authorization: Bearer <キー>`）に対応したサービスを利用できます。キーの保存は 12-2 と同じです。
+
+```hcl
+chat_provider               = "openai_compatible"
+chat_api_base_url           = "https://api.openai.com/v1"         # Groq の例: https://api.groq.com/openai/v1
+chat_model                  = "<モデル名>"                          # 必須
+chat_api_key_ssm_param_name = "/ee-sqlite-demo/chat-api-key"
+```
+
+- 回答の長さは `max_completion_tokens` で指定します。このパラメータに対応していないサービスは利用できません。
+- 料金・無料枠・入力データの扱いはサービスごとに異なります。利用規約を確認してから選んでください。
+
+### 12-4. Amazon Bedrock（Amazon Nova Micro）
+
+API キーは使わず、Web 用の Lambda の IAM ロールで呼び出します。東京リージョン（ap-northeast-1）では Nova Micro をリージョン内では直接呼び出せないため、**APAC のクロスリージョン推論プロファイル**（`apac.amazon.nova-micro-v1:0`）を使います。リクエストは APAC 内の他のリージョンで処理されることがあります。
+
+1. 東京リージョンから使える推論プロファイルと、転送先のリージョンを確認します（読み取りのみ）。
+
+```bash
+aws bedrock list-inference-profiles --region ap-northeast-1 --type-equals SYSTEM_DEFINED \
+  --query "inferenceProfileSummaries[?contains(inferenceProfileId, 'nova-micro')].inferenceProfileId"
+aws bedrock get-inference-profile --region ap-northeast-1 \
+  --inference-profile-identifier apac.amazon.nova-micro-v1:0 --query 'models[].modelArn'
+```
+
+2. `terraform.tfvars` に、推論プロファイルの ARN と、手順 1 で表示された **すべての転送先リージョンのモデルの ARN** を指定します（推論プロファイル経由の呼び出しには両方の権限が必要です）。
+
+```hcl
+chat_provider = "bedrock"
+# chat_model  = "apac.amazon.nova-micro-v1:0"  # 省略時の既定値
+chat_bedrock_resource_arns = [
+  "arn:aws:bedrock:ap-northeast-1:<ACCOUNT_ID>:inference-profile/apac.amazon.nova-micro-v1:0",
+  # 手順 1 の get-inference-profile の出力をそのまま並べる（例）
+  "arn:aws:bedrock:ap-northeast-1::foundation-model/amazon.nova-micro-v1:0",
+  "arn:aws:bedrock:ap-northeast-2::foundation-model/amazon.nova-micro-v1:0",
+  # ...
+]
+```
+
+> `terraform.tfvars` はコミットしない運用のため、アカウント ID はこのファイルにのみ記載します。
+
+```bash
+terraform plan    # CHAT_* 環境変数の追加と、IAM ポリシー <project_name>-invoke-bedrock-chat の追加であることを確認
+terraform apply
+```
+
+3. 初回の呼び出しで `AccessDeniedException` になる場合は、Bedrock コンソールでモデルの利用条件（Amazon Nova）を確認してください。組織の SCP で転送先のリージョンが拒否されている場合も失敗します。
+
+### 12-5. 動作の確認
+
+- ログアウト中に右下のチャットを開くと「ログインすると AI チャットを利用できます」と表示されます。
+- ログインして質問すると回答と「本日の残り: N 回」が表示されます。
+- ログ（CloudWatch Logs）は `DJANGO_LOG_LEVEL=WARNING`（既定）では失敗時のみ `chat_completion provider=... result=... status=... latency_ms=...` が記録されます。
+
+### 12-6. すぐに無効にする
+
+```hcl
+chat_provider = "disabled"
+```
+
+```bash
+terraform apply   # CHAT_* 環境変数と IAM ポリシーが削除され、チャットはデモ表示に戻る
+```
+
+Lambda の設定の更新が反映されると、新しいリクエストから `503`（「AI チャットは現在利用できません。」）となり、画面はデモ表示に戻ります。利用回数のテーブルは残りますが、回数のみのため削除は不要です。API キーも不要になった場合は、発行元でキーを無効化してから SSM のパラメータを削除します。
+
+### 12-7. 費用の目安
+
+費用の上限は `chat_global_daily_limit`（既定 200 回/日 → 最大 約 6,000 回/月）で決まります。1 回あたりの最大の入力は、システムプロンプト（約 900 文字）と会話の履歴（合計 6,000 文字まで）で **約 7,000 トークン**（日本語は 1 文字 ≒ 1 トークンとして多めに見積もり）、出力は `chat_max_output_tokens`（300 トークン）です。
+
+| 接続先 | 単価（入力 / 出力、100 万トークンあたり） | 上限まで使った場合の月額 | 通常の利用（入力 約 1,000 トークン/回）での月額 |
+| --- | --- | --- | --- |
+| Gemini API（無料枠） | $0 | $0（無料枠のレート制限を超えるとエラー） | $0 |
+| Gemini API（有料、`gemini-3.5-flash-lite`） | $0.30 / $2.50 | 約 $17（入力 4,200 万 × $0.30 + 出力 180 万 × $2.50） | 約 $6 |
+| Amazon Bedrock（Nova Micro、APAC 推論プロファイル） | 約 $0.037 / $0.148（米国リージョンは $0.035 / $0.14） | 約 $1.8 | 約 $0.5 |
+| Lambda（応答待ちの時間） | 512 MB × 最大 20 秒/回 | 約 6 万 GB 秒（無料枠 40 万 GB 秒/月の範囲内。超えた場合も約 $1） | ほぼ $0 |
+
+- **Gemini API の無料枠**: 料金はかかりませんが、モデルごとに 1 分・1 日あたりのリクエスト数の上限があり、超えると回答できません（502 として表示）。また、**無料枠（Unpaid Services）で送信した内容と回答は、Google の製品・機械学習技術の改善に利用され、人によるレビューの対象になることがあります**。利用者の質問がこの扱いを受けることを許容できない場合は、有料枠（Paid Services: 改善には利用されない）または Amazon Bedrock を選んでください。EEA・スイス・英国の利用者に提供する場合は有料枠のみ利用できます。
+- **Gemini 3 系のモデル**は回答前の「思考」のトークンも出力トークン（`maxOutputTokens`）に含まれ、課金されます。回答が途中で切れる場合は `chat_max_output_tokens` を増やしてください。
+- **Amazon Bedrock** の入力・出力は、Amazon Bedrock のサービス条件に従って扱われ、モデルの学習には利用されません。
+- 単価は 2026 年 10 月時点の公開情報です。利用前に各サービスの料金ページで最新の単価を確認してください。
+
+参考:
+- Gemini API の料金: https://ai.google.dev/gemini-api/docs/pricing
+- Gemini API の利用規約（無料枠・有料枠のデータの扱い）: https://ai.google.dev/gemini-api/terms
+- Gemini API のモデル: https://ai.google.dev/gemini-api/docs/models
+- Amazon Bedrock の料金: https://aws.amazon.com/bedrock/pricing/
+- Amazon Nova Micro（モデル ID・リージョン）: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-micro.html
+- クロスリージョン推論プロファイル: https://docs.aws.amazon.com/bedrock/latest/userguide/inference-profiles-support.html

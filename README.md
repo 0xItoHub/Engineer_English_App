@@ -20,7 +20,7 @@
 - シーン一覧/詳細、レッスン詳細（円形進捗メーター）
 - 学習履歴
 - 英文の読み上げ（事前に生成した音声を再生し、未対応の文は Web Speech API で読み上げ。速度は 0.75〜1.5 倍）
-- 右下 AI Chatbot（ダミー実装）
+- 右下 AI チャット: 設定で有効化（Gemini API / OpenAI 互換 API / Amazon Bedrock。ログインユーザーが仕事で使う英語を質問できる。既定は入力内容をそのまま返すデモ。手順は [infra/README.md](infra/README.md#12-ai-チャットの有効化)）
 - API エンドポイント例（相対パス）
   - `GET /api/scenes/`
   - `GET /api/lessons/`
@@ -28,6 +28,8 @@
   - `GET /api/dialogues/`
   - `GET /api/progress/my_progress/`
   - `POST /api/progress/complete_lesson/`
+  - `GET /api/chat/status/`
+  - `POST /api/chat/`（ログインが必要）
 
 ---
 
