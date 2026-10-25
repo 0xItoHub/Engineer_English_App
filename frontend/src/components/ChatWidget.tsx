@@ -20,7 +20,7 @@ const ChatWidget: React.FC = () => {
     <>
       <Fab
         color="primary"
-        aria-label="AI チャット（デモ）を開く"
+        aria-label="AI チャットを開く"
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={open ? "chat-dialog" : undefined}

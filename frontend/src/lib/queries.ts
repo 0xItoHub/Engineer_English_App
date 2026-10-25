@@ -65,6 +65,9 @@ export const queryKeys = {
   // 学習進捗はユーザーごとにキャッシュを分ける（未ログイン時は "anonymous"）
   myProgressAll: ["progress", "mine"] as const,
   myProgress: (sub: string | null) => ["progress", "mine", sub ?? ANONYMOUS_KEY] as const,
+  // AI チャットの状態（ログイン中は本日の残り回数を含むため、ユーザーごとに分ける）
+  chatStatusAll: ["chat", "status"] as const,
+  chatStatus: (sub: string | null) => ["chat", "status", sub ?? ANONYMOUS_KEY] as const,
 };
 
 const ANONYMOUS_KEY = "anonymous";
@@ -72,7 +75,9 @@ const ANONYMOUS_KEY = "anonymous";
 // ログイン中のユーザーに紐づくキャッシュ（ログアウト時に削除する）
 export function isUserScopedQuery(query: Pick<Query, "queryKey">): boolean {
   const key = query.queryKey;
-  return key[0] === "progress" && key[1] === "mine" && key[2] !== ANONYMOUS_KEY;
+  if (key[0] === "progress" && key[1] === "mine") return key[2] !== ANONYMOUS_KEY;
+  if (key[0] === "chat" && key[1] === "status") return key[2] !== ANONYMOUS_KEY;
+  return false;
 }
 
 // 教材データ（シーン・レッスン）は更新頻度が低いため、一定時間はキャッシュを再利用する
@@ -95,6 +100,25 @@ export function createQueryClient(): QueryClient {
     },
   });
 }
+
+// AI チャットの状態（/api/chat/status/）
+export type ChatLimits = {
+  max_input_chars: number;
+  max_history: number;
+  user_daily_limit: number;
+};
+
+export type ChatStatus = {
+  enabled: boolean;
+  requires_login: boolean;
+  limits: ChatLimits;
+  // ログイン中かつ利用できる場合のみ含まれる
+  remaining_today?: number;
+};
+
+// AI チャットに送るメッセージと回答（/api/chat/）
+export type ChatApiMessage = { role: "user" | "assistant"; content: string };
+export type ChatReply = { reply: string; remaining_today: number };
 
 // ---- クエリ関数 ----
 
@@ -134,6 +158,24 @@ export async function postCompleteLesson({ lessonId, score, timeSpent }: Complet
     time_spent: timeSpent,
   });
   return res?.data;
+}
+
+// 状態を取得できない場合に使う上限（サーバーの既定値と同じ）
+export const DEFAULT_CHAT_LIMITS: ChatLimits = { max_input_chars: 500, max_history: 6, user_daily_limit: 20 };
+
+export async function fetchChatStatus(signal?: AbortSignal): Promise<ChatStatus> {
+  const res = await axios.get(url("/api/chat/status/"), { signal });
+  const data = res?.data as Partial<ChatStatus> | undefined;
+  // 想定外の応答は「利用できない」として扱う（デモ表示になる）
+  if (!data || data.enabled !== true || !data.limits) {
+    return { enabled: false, requires_login: true, limits: DEFAULT_CHAT_LIMITS };
+  }
+  return data as ChatStatus;
+}
+
+export async function postChat(messages: ChatApiMessage[]): Promise<ChatReply> {
+  const res = await axios.post(url("/api/chat/"), { messages });
+  return res.data;
 }
 
 // ---- フック ----
@@ -190,6 +232,18 @@ export function useCompleteLessonMutation() {
   return useMutation({
     mutationFn: postCompleteLesson,
     onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.myProgressAll }),
+  });
+}
+
+// AI チャットの状態（チャットの画面を開いたときに取得する）
+export function useChatStatusQuery() {
+  const auth = useAppAuth();
+  const sub = auth.isAuthenticated ? auth.sub : null;
+  return useQuery({
+    queryKey: queryKeys.chatStatus(sub),
+    queryFn: ({ signal }) => fetchChatStatus(signal),
+    staleTime: PROGRESS_STALE_TIME,
+    enabled: !auth.isLoading,
   });
 }
 
