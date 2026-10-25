@@ -233,6 +233,8 @@ REST_FRAMEWORK = {
         "user": os.getenv("DJANGO_THROTTLE_USER", "600/min"),
         # 学習完了の記録（POST /api/progress/complete_lesson/）は個別に厳しめの上限を設定
         "complete_lesson": os.getenv("DJANGO_THROTTLE_COMPLETE_LESSON", "30/min"),
+        # CSP 違反レポートの受け付け（POST /api/csp-report/）は IP 単位で制限
+        "csp_report": os.getenv("DJANGO_THROTTLE_CSP_REPORT", "30/min"),
     },
     # エラー応答を {"detail": ...} 形式の JSON にそろえる（データベースの障害は 503）
     "EXCEPTION_HANDLER": "core.exceptions.api_exception_handler",

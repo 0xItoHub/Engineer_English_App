@@ -239,6 +239,22 @@ terraform -chdir=infra output -raw cognito_authority
 
 バックエンド（Lambda）には `COGNITO_USER_POOL_ID` と `COGNITO_APP_CLIENT_ID` が Terraform から設定され、API はアクセストークンを検証します。
 
+### 7-1. ログイン画面の表示言語とデザイン
+
+- **表示言語**: フロントエンドはログイン開始時（`/oauth2/authorize`）に `lang=ja` を付けて、マネージドログインの画面を日本語で表示します（`frontend/src/lib/auth.ts` の `LOGIN_PAGE_LANGUAGE`）。選択した言語は Cognito の Cookie に保存されます。
+- **デザイン**: `infra/cognito_branding.json` の設定（ブランディングの `Settings`）を `aws_cognito_managed_login_branding` に適用します。アプリのテーマに合わせ、ライトモードのみ・明るい背景・白いフォーム・紺色（`#0A1A2F`）のメインボタン・アクセント色（`#3c5aa6`）のリンクと選択状態・角丸（ボタンと入力欄 10px、フォーム 16px）を指定しています。
+  - 色は `RRGGBBAA` 形式（末尾 2 桁は不透明度）で記述します。記載のない項目には Cognito の既定値が使われます。
+  - ロゴ画像は設定していません（追加する場合は `asset` ブロックで `FORM_LOGO` などを PNG / SVG / JPEG で指定し、`components.form.logo.enabled` を `true` にします）。
+- **確認コードのメール**: 登録時の確認やパスワード再設定で送るメールの件名・本文を日本語にしています（`verification_message_template`。`{####}` が確認コードに置き換わります）。
+
+`terraform apply` の後は、次の点を確認してください。
+
+1. `terraform plan` を再実行し、`aws_cognito_managed_login_branding.spa` に差分が出続けないこと
+2. ログイン画面（`lang=ja`）が日本語で表示され、背景・フォーム・ボタン・リンクの色と角丸が意図どおりであること（新規登録・パスワード再設定の画面も含む）
+3. 新規登録時の確認メールが日本語の件名・本文で届くこと
+
+デザインを調整する場合は、Cognito コンソールの「マネージドログイン」→ スタイルの編集画面で見た目を確認し、`DescribeManagedLoginBrandingByClient`（`ReturnMergedResources=true`）で取得した `Settings` から必要な項目を `cognito_branding.json` に反映すると、Terraform の設定と画面を一致させられます。
+
 ## 8. CloudFront 経由のリクエストの確認とレート制限
 
 API は CloudFront の `/api/*` から配信します。CloudFront と API（Django）の間で次の 2 つのヘッダーを使います。
@@ -278,3 +294,61 @@ aws cloudfront wait distribution-deployed --id "$(terraform output -raw cloudfro
 # 4. Lambda 側の確認を再開する（新しい値）
 terraform apply
 ```
+
+## 9. セキュリティヘッダーと Content Security Policy（CSP）
+
+`infra/security_headers.tf` の CloudFront レスポンスヘッダーポリシーで、次のヘッダーを付与します。
+
+| 対象 | ヘッダー | 値 |
+| --- | --- | --- |
+| フロントエンド・API | `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` |
+| フロントエンド・API | `X-Content-Type-Options` | `nosniff` |
+| フロントエンド・API | `X-Frame-Options` | `DENY` |
+| フロントエンド・API | `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| フロントエンド | `Content-Security-Policy-Report-Only`（`csp_enforce = true` のときは `Content-Security-Policy`） | 下記 |
+| フロントエンド | `Permissions-Policy` | `camera=(), microphone=(), geolocation=(), payment=(), usb=()` |
+
+API（`/api/*`）は JSON を返すため CSP は付与せず、Django（`SecurityMiddleware` など）が設定したヘッダーがある場合はそちらを優先します（`override = false`）。
+
+CSP は Terraform のリソース（リージョン・Cognito のドメイン・API Gateway のエンドポイント）から組み立てます。
+
+```text
+default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+font-src 'self' https://fonts.gstatic.com; img-src 'self' data:;
+connect-src 'self' https://cognito-idp.<region>.amazonaws.com https://<prefix>.auth.<region>.amazoncognito.com;
+frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; report-uri /api/csp-report/
+```
+
+`csp_enforce = true` のときは、末尾に `upgrade-insecure-requests` も加わります（レポートのみのモードではブラウザが無視するため）。
+
+### 8-1. 違反レポートの確認
+
+ブラウザは CSP の違反を `POST /api/csp-report/` に送信し、Django が要点のみを 1 行のログ（WARNING）に記録します。
+
+```text
+csp_violation directive=img-src blocked=https://img.example.com document=/scene/1 disposition=report
+```
+
+- 記録するのは、ディレクティブ・ブロックされたリソースのオリジン（`data:` などはスキームのみ）・ページのパス・処理の種類のみです。クエリ文字列やレポート本文全体は記録せず、データベースにも保存しません。
+- 本文は 8 KB まで（超える場合は 413）、IP 単位で 30 回/分まで受け付けます（環境変数 `DJANGO_THROTTLE_CSP_REPORT` で変更可能）。
+
+CloudWatch Logs Insights でロググループ `/aws/lambda/<project_name>-api` を選び、次のクエリで集計できます。
+
+```text
+fields @timestamp, @message
+| filter @message like /csp_violation/
+| parse @message "directive=* blocked=* document=* disposition=*" as directive, blocked, document, disposition
+| stats count(*) as reports by directive, blocked
+| sort reports desc
+```
+
+### 8-2. CSP の適用（レポートのみ → ブロック）
+
+既定（`csp_enforce = false`）では違反をブロックせず、報告のみを行います。
+一定期間レポートを確認し、正常な画面操作（ログイン・ログアウト・学習・読み上げ）で違反が出ていないことを確かめてから、`terraform.tfvars` に次の 1 行を追加して `terraform apply` します。
+
+```hcl
+csp_enforce = true
+```
+
+ヘッダー名が `Content-Security-Policy` に切り替わり、ポリシーに反する読み込みがブロックされます。元に戻す場合は `false` にして再度 `apply` します。

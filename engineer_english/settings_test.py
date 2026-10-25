@@ -11,6 +11,7 @@ os.environ.pop("ORIGIN_VERIFY_SECRET", None)
 os.environ.setdefault("DJANGO_THROTTLE_ANON", "100000/min")
 os.environ.setdefault("DJANGO_THROTTLE_USER", "100000/min")
 os.environ.setdefault("DJANGO_THROTTLE_COMPLETE_LESSON", "100000/min")
+os.environ.setdefault("DJANGO_THROTTLE_CSP_REPORT", "100000/min")
 
 from .settings import *  # noqa: E402, F403
 

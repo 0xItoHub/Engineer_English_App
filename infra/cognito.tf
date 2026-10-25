@@ -39,6 +39,13 @@ resource "aws_cognito_user_pool" "main" {
     email_sending_account = "COGNITO_DEFAULT"
   }
 
+  # 登録時の確認やパスワード再設定で送る確認コードのメール（日本語。{####} が確認コードに置き換わる）
+  verification_message_template {
+    default_email_option = "CONFIRM_WITH_CODE"
+    email_subject        = "【Engineer English App】確認コードのお知らせ"
+    email_message        = "Engineer English App をご利用いただきありがとうございます。<br><br>確認コードは <b>{####}</b> です。<br>画面に戻り、このコードを入力してください。<br><br>このメールに心当たりがない場合は、破棄していただいて問題ありません。"
+  }
+
   user_attribute_update_settings {
     attributes_require_verification_before_update = ["email"]
   }
@@ -89,9 +96,11 @@ resource "aws_cognito_user_pool_client" "spa" {
   prevent_user_existence_errors = "ENABLED"
 }
 
-# マネージドログインの画面（Cognito 標準のデザインを使用）
+# マネージドログインの画面（アプリのテーマに合わせた配色・角丸。ライトモードのみ）
+# 設定内容は cognito_branding.json に記載する（色は RRGGBBAA 形式。指定のない項目は Cognito の既定値）
+# 画面の表示言語は、ログイン開始時の lang=ja パラメータ（フロントエンド）で日本語にする
 resource "aws_cognito_managed_login_branding" "spa" {
-  user_pool_id                = aws_cognito_user_pool.main.id
-  client_id                   = aws_cognito_user_pool_client.spa.id
-  use_cognito_provided_values = true
+  user_pool_id = aws_cognito_user_pool.main.id
+  client_id    = aws_cognito_user_pool_client.spa.id
+  settings     = jsonencode(jsondecode(file("${path.module}/cognito_branding.json")))
 }
