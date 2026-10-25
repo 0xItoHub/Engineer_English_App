@@ -24,10 +24,13 @@ logger = logging.getLogger("core.csp_report")
 
 # 受け付ける本文の上限（バイト）
 MAX_BODY_BYTES = 8 * 1024
-# 1 リクエストで記録するレポートの上限（Reporting API は配列でまとめて送信される）
-MAX_REPORTS_PER_REQUEST = 5
+# 1 リクエストで記録するレポートの上限
+# （Reporting API は配列でまとめて送信される。ログの量を抑えるため 1 件）
+MAX_REPORTS_PER_REQUEST = 1
 # ログに残すパスの最大長
-MAX_PATH_LENGTH = 128
+MAX_PATH_LENGTH = 64
+# ログに残すオリジンの最大長
+MAX_BLOCKED_LENGTH = 64
 
 SUPPORTED_CONTENT_TYPES = {
     "application/csp-report",
@@ -81,7 +84,8 @@ def _blocked(value):
         return "-"
     if not _HOST_RE.match(host):
         return f"{scheme}:"
-    return f"{scheme}://{host}:{port}" if port else f"{scheme}://{host}"
+    origin = f"{scheme}://{host}:{port}" if port else f"{scheme}://{host}"
+    return origin[:MAX_BLOCKED_LENGTH]
 
 
 def _document_path(value):

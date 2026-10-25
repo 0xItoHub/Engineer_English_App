@@ -59,7 +59,7 @@ def test_csp_report_format_returns_204_and_logs_summary(client, caplog):
     assert all(r.levelno == logging.WARNING for r in caplog.records if r.name == LOGGER)
 
 
-def test_reports_json_format_returns_204_and_logs_each_report(client, caplog):
+def test_reports_json_format_returns_204_and_logs_first_report(client, caplog):
     caplog.set_level(logging.WARNING, logger=LOGGER)
     payload = [
         {
@@ -85,7 +85,6 @@ def test_reports_json_format_returns_204_and_logs_each_report(client, caplog):
     assert _messages(caplog) == [
         "csp_violation directive=img-src blocked=https://img.example.org:8443 "
         "document=/scene/1 disposition=enforce",
-        "csp_violation directive=style-src-attr blocked=inline document=/ disposition=-",
     ]
 
 
