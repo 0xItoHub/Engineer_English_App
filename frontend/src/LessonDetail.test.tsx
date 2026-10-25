@@ -3,7 +3,7 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import axios from 'axios';
 import LessonDetail from './LessonDetail';
-import { LOCAL_PROGRESS_KEY } from './lib/storage';
+import { LOCAL_PROGRESS_KEY, SPEECH_RATE_KEY } from './lib/storage';
 import { renderWithClient } from './test/renderWithClient';
 
 vi.mock('axios');
@@ -98,12 +98,38 @@ test('音声読み上げ対応の環境では速度を選んで読み上げら�
     renderLessonDetail();
 
     fireEvent.click(await screen.findByRole('button', { name: '次へ' }));
-    fireEvent.click(screen.getByRole('button', { name: '1 倍速' }));
+    // 既定の速度は 1 倍
+    expect(screen.getByRole('button', { name: '1 倍速' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: '1.25 倍速' }));
+    expect(window.localStorage.getItem(SPEECH_RATE_KEY)).toBe('1.25');
     fireEvent.click(screen.getByRole('button', { name: 'I fixed the bug. を英語で読み上げ' }));
 
     expect(speakMock).toHaveBeenCalledTimes(1);
-    expect(speakMock.mock.calls[0][0]).toMatchObject({ text: 'I fixed the bug.', rate: 1 });
+    expect(speakMock.mock.calls[0][0]).toMatchObject({ text: 'I fixed the bug.', rate: 1.25 });
     expect(screen.getByRole('button', { name: 'I fixed the bug. の読み上げを停止' })).toBeInTheDocument();
+    // 読み上げ中であることを支援技術に伝える
+    expect(screen.getByRole('status')).toHaveTextContent('読み上げ中');
+    fireEvent.click(screen.getByRole('button', { name: 'I fixed the bug. の読み上げを停止' }));
+    expect(screen.getByRole('status')).toHaveTextContent('');
+  } finally {
+    const w = window as unknown as Record<string, unknown>;
+    delete w.speechSynthesis;
+    delete w.SpeechSynthesisUtterance;
+  }
+});
+
+test('前回選んだ読み上げ速度を次のレッスンでも使う', async () => {
+  const synth = { speak: vi.fn(), cancel: vi.fn(), getVoices: () => [], addEventListener: vi.fn(), removeEventListener: vi.fn() };
+  Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: synth });
+  Object.defineProperty(window, 'SpeechSynthesisUtterance', { configurable: true, value: class { text: string; constructor(text: string) { this.text = text; } } });
+  window.localStorage.setItem(SPEECH_RATE_KEY, '0.75');
+
+  try {
+    mockLessonApi();
+    renderLessonDetail();
+
+    fireEvent.click(await screen.findByRole('button', { name: '次へ' }));
+    expect(screen.getByRole('button', { name: '0.75 倍速' })).toHaveAttribute('aria-pressed', 'true');
   } finally {
     const w = window as unknown as Record<string, unknown>;
     delete w.speechSynthesis;

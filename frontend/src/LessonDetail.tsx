@@ -33,7 +33,8 @@ import { isNotFoundError, queryView } from "./lib/queryState";
 import { usePageTitle } from "./hooks/usePageTitle";
 import NotFound from "./components/NotFound";
 import { LoadingView, QueryErrorAlert } from "./components/QueryStatus";
-import { pushLocalProgress, removeLocalProgressEntry } from "./lib/storage";
+import { pushLocalProgress, readSpeechRate, removeLocalProgressEntry, writeSpeechRate } from "./lib/storage";
+import { visuallyHidden } from "./lib/a11y";
 import { useAppAuth } from "./lib/auth";
 import { pickEnglishVoice, utteranceLang } from "./lib/tts";
 import {
@@ -45,7 +46,7 @@ import {
 
 // 読み上げ速度の選択肢
 const SPEECH_RATES = [0.75, 1, 1.25, 1.5];
-const DEFAULT_SPEECH_RATE = 1.5;
+const DEFAULT_SPEECH_RATE = 1;
 
 // 完了時にサーバへ送るスコア（API との互換性のため、完了は常に 100 として記録する）
 const COMPLETED_SCORE = 100;
@@ -91,8 +92,12 @@ const LessonDetail: React.FC = () => {
   const [speakingId, setSpeakingId] = useState<number | null>(null);
   const [speakingDialogueId, setSpeakingDialogueId] = useState<number | null>(null);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-  // 読み上げ速度（既定はネイティブ並みの 1.5 倍）
-  const [speechRate, setSpeechRate] = useState<number>(DEFAULT_SPEECH_RATE);
+  // 読み上げ速度（既定は標準の 1 倍。前回選んだ速度をブラウザに記憶する）
+  const [speechRate, setSpeechRate] = useState<number>(() => readSpeechRate(SPEECH_RATES, DEFAULT_SPEECH_RATE));
+  const changeSpeechRate = (rate: number) => {
+    setSpeechRate(rate);
+    writeSpeechRate(rate);
+  };
   const ttsSupported = isSpeechSynthesisSupported();
 
   useEffect(() => {
@@ -172,7 +177,7 @@ const LessonDetail: React.FC = () => {
       return (
         <Tooltip title="お使いのブラウザは音声読み上げに対応していません">
           <span>
-            <IconButton color="primary" disabled aria-label={`${label}（音声読み上げ非対応）`}>
+            <IconButton size="large" color="primary" disabled aria-label={`${label}（音声読み上げ非対応）`}>
               <VolumeUpIcon />
             </IconButton>
           </span>
@@ -181,13 +186,13 @@ const LessonDetail: React.FC = () => {
     }
     return speaking ? (
       <Tooltip title="停止">
-        <IconButton color="error" onClick={stopSpeaking} aria-label={`${label} の読み上げを停止`}>
+        <IconButton size="large" color="error" onClick={stopSpeaking} aria-label={`${label} の読み上げを停止`}>
           <StopCircleIcon />
         </IconButton>
       </Tooltip>
     ) : (
       <Tooltip title="英語で読み上げ">
-        <IconButton color="primary" onClick={onSpeak} aria-label={`${label} を英語で読み上げ`}>
+        <IconButton size="large" color="primary" onClick={onSpeak} aria-label={`${label} を英語で読み上げ`}>
           <VolumeUpIcon />
         </IconButton>
       </Tooltip>
@@ -202,8 +207,9 @@ const LessonDetail: React.FC = () => {
         size="small"
         exclusive
         value={speechRate}
-        onChange={(_e, v: number | null) => { if (v != null) setSpeechRate(v); }}
+        onChange={(_e, v: number | null) => { if (v != null) changeSpeechRate(v); }}
         aria-labelledby="speech-rate-label"
+        sx={{ '& .MuiToggleButton-root': { minHeight: 44, minWidth: 44 } }}
       >
         {SPEECH_RATES.map((r) => (
           <ToggleButton key={r} value={r} aria-label={`${r} 倍速`}>{r}x</ToggleButton>
@@ -453,6 +459,11 @@ const LessonDetail: React.FC = () => {
             <Button variant="contained" onClick={handleNext}>次へ</Button>
           )}
         </Box>
+      </Box>
+
+      {/* 読み上げの状態を支援技術に伝える */}
+      <Box role="status" aria-live="polite" sx={visuallyHidden}>
+        {speakingId !== null || speakingDialogueId !== null ? "読み上げ中" : ""}
       </Box>
 
       <Snackbar open={!!notice} autoHideDuration={notice?.severity === 'warning' ? NAVIGATE_DELAY_WARNING_MS : NAVIGATE_DELAY_MS} onClose={() => setNotice(null)}>

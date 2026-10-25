@@ -3,6 +3,9 @@ import {
   getLocalProgressSnapshot,
   pushLocalProgress,
   readJSON,
+  readSpeechRate,
+  SPEECH_RATE_KEY,
+  writeSpeechRate,
   readLocalProgress,
   removeLocalProgressEntry,
   subscribeLocalProgress,
@@ -89,4 +92,17 @@ test('保存内容が同じ間は同じ配列を返し、保存時と他のタ�
   unsubscribe();
   pushLocalProgress({ lesson: 2, score: 100, time_spent: 1 });
   expect(onChange).toHaveBeenCalledTimes(2);
+});
+
+test('読み上げ速度は選択肢に含まれる値だけを読み込み、それ以外は既定値を返す', () => {
+  const rates = [0.75, 1, 1.25, 1.5];
+  expect(readSpeechRate(rates, 1)).toBe(1);
+  expect(writeSpeechRate(1.25)).toBe(true);
+  expect(readSpeechRate(rates, 1)).toBe(1.25);
+  window.localStorage.setItem(SPEECH_RATE_KEY, '3');
+  expect(readSpeechRate(rates, 1)).toBe(1);
+  window.localStorage.setItem(SPEECH_RATE_KEY, '"fast"');
+  expect(readSpeechRate(rates, 1)).toBe(1);
+  window.localStorage.setItem(SPEECH_RATE_KEY, '{oops');
+  expect(readSpeechRate(rates, 1)).toBe(1);
 });

@@ -7,6 +7,7 @@ import {
   Chat as ChatIcon,
 } from "@mui/icons-material";
 import type { ContentStats as Stats } from "../lib/queries";
+import { visuallyHidden } from "../lib/a11y";
 
 type Props = {
   stats: Stats;
@@ -18,19 +19,6 @@ const ITEMS: { key: keyof Stats; label: string; caption: string; Icon: typeof Bo
   { key: "phrases", label: "フレーズ", caption: "音声読み上げに対応", Icon: BookIcon },
   { key: "dialogues", label: "対話", caption: "順序付きの会話で練習", Icon: ChatIcon },
 ];
-
-// 見出しを画面には表示せず、支援技術にだけ伝える
-const visuallyHidden = {
-  position: "absolute",
-  width: 1,
-  height: 1,
-  overflow: "hidden",
-  clip: "rect(0 0 0 0)",
-  whiteSpace: "nowrap",
-  border: 0,
-  p: 0,
-  m: -1,
-} as const;
 
 // 収録している教材の数（シーン一覧の取得結果から集計した値を表示する）
 const ContentStats: React.FC<Props> = ({ stats }) => (

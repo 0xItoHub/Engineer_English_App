@@ -157,3 +157,17 @@ export function subscribeLocalProgress(onChange: () => void): () => void {
     window.removeEventListener(LOCAL_PROGRESS_EVENT, onChange);
   };
 }
+
+// ---- 読み上げ速度（ブラウザごとに前回選んだ速度を使う） ----
+
+export const SPEECH_RATE_KEY = "ee_speech_rate";
+
+// 選択肢に含まれる速度だけを読み込む（保存されていない・形式が正しくない場合は既定値）
+export function readSpeechRate(allowed: readonly number[], fallback: number): number {
+  const value = readJSON<unknown>(SPEECH_RATE_KEY, null);
+  return typeof value === "number" && allowed.includes(value) ? value : fallback;
+}
+
+export function writeSpeechRate(rate: number): boolean {
+  return writeJSON(SPEECH_RATE_KEY, rate);
+}
