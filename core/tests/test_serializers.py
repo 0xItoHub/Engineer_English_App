@@ -45,7 +45,7 @@ def test_user_progress_serializer_exposes_titles(user, lesson):
 
     assert data["lesson_title"] == lesson.title
     assert data["scene_title"] == lesson.scene.title
-    assert data["username"] == "alice"
+    assert "username" not in data
     assert data["score"] == 80
 
 
@@ -58,7 +58,6 @@ def test_user_progress_serializer_fields(user, lesson):
         "lesson",
         "lesson_title",
         "scene_title",
-        "username",
         "completed_at",
         "score",
         "time_spent",

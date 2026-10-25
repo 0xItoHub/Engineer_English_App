@@ -1,7 +1,7 @@
 from unittest import mock
 
 import pytest
-from django.db import OperationalError, connection
+from django.db import IntegrityError, OperationalError, connection
 from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APIClient
 
@@ -157,7 +157,7 @@ def test_progress_list_returns_only_own_records(auth_client, user, lesson):
     body = auth_client.get("/api/progress/").json()
 
     assert len(body) == 1
-    assert body[0]["username"] == "alice"
+    assert "username" not in body[0]
 
 
 def test_progress_detail_of_other_user_returns_404(auth_client, user, lesson):
@@ -233,14 +233,16 @@ def test_complete_lesson_clamps_values(auth_client, user, lesson, score, time_sp
     assert (progress.score, progress.time_spent) == expected
 
 
-def test_complete_lesson_records_username_and_hides_sub(auth_client, user, lesson):
+def test_complete_lesson_hides_user_identifiers(auth_client, user, lesson):
     res = auth_client.post(COMPLETE_URL, {"lesson_id": lesson.id, "score": 70}, format="json")
 
     body = res.json()
-    assert body["username"] == "alice"
     assert body["lesson"] == lesson.id
     assert "user_sub" not in body
-    assert UserProgress.objects.get().user_sub == "sub-alice"
+    assert "username" not in body
+    progress = UserProgress.objects.get()
+    assert progress.user_sub == "sub-alice"
+    assert progress.username == ""
 
 
 def test_complete_lesson_keys_progress_by_sub(user, lesson):
@@ -283,7 +285,7 @@ def test_complete_lesson_returns_503_when_conflicts_persist(auth_client, lesson)
         res = auth_client.post(COMPLETE_URL, {"lesson_id": lesson.id, "score": 60})
 
     assert res.status_code == 503
-    assert "error" in res.json()
+    assert "detail" in res.json()
     assert UserProgress.objects.count() == 0
 
 
@@ -296,12 +298,20 @@ def test_complete_lesson_returns_503_when_conflicts_persist(auth_client, lesson)
         {"lesson_id": [1]},
         {"lesson_id": 1, "score": "high"},
         {"lesson_id": 1, "time_spent": {"a": 1}},
+        {"lesson_id": True},
+        {"lesson_id": 1, "score": True},
+        {"lesson_id": 1, "time_spent": False},
+        {"lesson_id": 1.5},
+        {"lesson_id": 1, "score": 80.5},
+        {"lesson_id": 1, "score": None},
+        {"lesson_id": 0},
+        {"lesson_id": -1},
     ],
 )
 def test_complete_lesson_invalid_input_returns_400(api_client, lesson, payload):
     res = api_client.post(COMPLETE_URL, payload, format="json")
     assert res.status_code == 400
-    assert "error" in res.json()
+    assert "detail" in res.json()
 
 
 @pytest.mark.parametrize("body", ["[1, 2]", '"text"', "not json"])
@@ -310,7 +320,7 @@ def test_complete_lesson_non_object_body_returns_400(api_client, db, body):
     assert res.status_code == 400
 
 
-@pytest.mark.parametrize("lesson_id", [9999, 0, -1, 10**30])
+@pytest.mark.parametrize("lesson_id", [9999, 10**30])
 def test_complete_lesson_unknown_lesson_returns_404(api_client, db, lesson_id):
     res = api_client.post(COMPLETE_URL, {"lesson_id": lesson_id}, format="json")
     assert res.status_code == 404
@@ -348,7 +358,7 @@ def test_my_progress_returns_only_own_records(auth_client, user, lesson):
 
     assert res.status_code == 200
     assert len(body) == 1
-    assert body[0]["username"] == "alice"
+    assert "username" not in body[0]
     assert body[0]["scene_title"] == lesson.scene.title
 
 
@@ -374,3 +384,118 @@ def test_home_redirect_ignores_query_parameters(client, monkeypatch):
     res = client.get("/?next=https://evil.example/")
 
     assert res["Location"] == "https://frontend.example/"
+
+
+# --- 並び順 -----------------------------------------------------------------
+
+
+@pytest.mark.parametrize("resource", ["scenes", "lessons", "phrases", "dialogues"])
+def test_list_queries_are_ordered(api_client, db, resource):
+    make_scene_with_content("First", lessons=2)
+    make_scene_with_content("Second", lessons=2)
+
+    with CaptureQueriesContext(connection) as ctx:
+        res = api_client.get(f"/api/{resource}/")
+
+    assert res.status_code == 200
+    # 一覧・ネストした一覧の取得クエリはすべて並び順を指定する
+    assert ctx.captured_queries
+    assert all("ORDER BY" in q["sql"] for q in ctx.captured_queries)
+
+
+def test_scene_nested_lists_are_sorted(api_client, scene):
+    lesson_a = make_lesson(scene, title="A")
+    lesson_b = make_lesson(scene, title="B")
+    phrases = [make_phrase(lesson=lesson_a, text_en=f"p{i}") for i in range(3)]
+    # 表示順（order）を優先し、同じ order の場合は ID 順に並べる
+    late = make_dialogue(lesson=lesson_a, order=2)
+    tie_first = make_dialogue(lesson=lesson_b, order=1)
+    tie_second = make_dialogue(lesson=lesson_b, order=1)
+
+    body = api_client.get(f"/api/scenes/{scene.id}/").json()
+
+    assert [lesson["id"] for lesson in body["lessons"]] == [lesson_a.id, lesson_b.id]
+    assert [p["id"] for p in body["phrases"]] == [p.id for p in phrases]
+    assert [d["id"] for d in body["dialogues"]] == [tie_first.id, tie_second.id, late.id]
+
+
+def test_lesson_detail_dialogues_are_sorted(api_client, lesson):
+    second = make_dialogue(lesson=lesson, order=2)
+    first = make_dialogue(lesson=lesson, order=1)
+
+    body = api_client.get(f"/api/lessons/{lesson.id}/").json()
+
+    assert [d["id"] for d in body["lesson_dialogues"]] == [first.id, second.id]
+
+
+def test_progress_list_is_newest_first(auth_client, user, scene):
+    older = make_progress(user, make_lesson(scene, title="Old"))
+    newer = make_progress(user, make_lesson(scene, title="New"))
+    # 完了日時が同じ場合は ID の降順に並べる
+    UserProgress.objects.update(completed_at=older.completed_at)
+
+    body = auth_client.get("/api/progress/").json()
+
+    assert [p["id"] for p in body] == [newer.id, older.id]
+
+
+# --- 同時作成時の再試行 -----------------------------------------------------
+
+
+def test_complete_lesson_retries_concurrent_create_as_update(auth_client, user, lesson):
+    """同じ記録が同時に作成された場合は、トランザクションをやり直して既存の記録を更新する。"""
+    calls = []
+
+    def concurrent_create(**kwargs):
+        calls.append(1)
+        if len(calls) == 1:
+            # 別のリクエストが同じ記録を先に作成した場合の一意制約の競合
+            raise IntegrityError("duplicate key value violates unique constraint")
+        raise AssertionError("再試行では作成ではなく更新を行う")
+
+    def other_request_commits(_delay):
+        # 再試行の待機中に、別のリクエストの記録がコミットされた状態を再現する
+        UserProgress(user_sub=user.sub, lesson=lesson, score=90, time_spent=10).save()
+
+    with mock.patch.object(UserProgress.objects, "create", side_effect=concurrent_create):
+        with mock.patch.object(core_db.time, "sleep", side_effect=other_request_commits):
+            res = auth_client.post(
+                COMPLETE_URL, {"lesson_id": lesson.id, "score": 70, "time_spent": 30}
+            )
+
+    assert res.status_code == 200
+    assert len(calls) == 1
+    progress = UserProgress.objects.get(user_sub=user.sub, lesson=lesson)
+    # 最高スコアを保持し、学習時間は最新の値に更新する
+    assert (progress.score, progress.time_spent) == (90, 30)
+
+
+def test_record_progress_does_not_use_get_or_create(auth_client, lesson):
+    with mock.patch.object(
+        UserProgress.objects, "get_or_create", side_effect=AssertionError("unused")
+    ):
+        res = auth_client.post(COMPLETE_URL, {"lesson_id": lesson.id, "score": 70})
+
+    assert res.status_code == 200
+
+
+def test_complete_lesson_accepts_integral_values(auth_client, user, lesson):
+    # 整数として解釈できる値（"80" や 80.0）は受け付ける
+    res = auth_client.post(
+        COMPLETE_URL,
+        {"lesson_id": str(lesson.id), "score": "80", "time_spent": 30.0},
+        format="json",
+    )
+
+    assert res.status_code == 200
+    progress = UserProgress.objects.get(user_sub=user.sub, lesson=lesson)
+    assert (progress.score, progress.time_spent) == (80, 30)
+
+
+def test_complete_lesson_validation_error_lists_fields(api_client, lesson):
+    res = api_client.post(COMPLETE_URL, {"lesson_id": lesson.id, "score": True}, format="json")
+
+    body = res.json()
+    assert res.status_code == 400
+    assert body["detail"] == "入力内容に誤りがあります。"
+    assert set(body["errors"]) == {"score"}

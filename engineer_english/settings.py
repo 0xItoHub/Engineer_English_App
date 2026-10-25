@@ -38,7 +38,13 @@ INSTALLED_APPS = [
     "core",
 ]
 
+# CloudFront 経由のリクエストの確認（X-Origin-Verify）と閲覧者の IP アドレスの設定（X-Viewer-IP）。
+# 値は Terraform が生成し、Lambda の環境変数で渡す。未設定（ローカル開発・テスト）なら確認しない。
+ORIGIN_VERIFY_SECRET = os.getenv("ORIGIN_VERIFY_SECRET", "").strip()
+
 MIDDLEWARE = [
+    # 他のミドルウェアより先に、経路の確認と転送用ヘッダーの整理を行う
+    "core.middleware.OriginVerifyMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -85,6 +91,10 @@ def _find_ca_bundle(candidates=CA_BUNDLE_CANDIDATES):
     return next((path for path in candidates if os.path.isfile(path)), None)
 
 
+# Aurora DSQL への接続確立のタイムアウト（秒）
+DSQL_CONNECT_TIMEOUT_SECONDS = 5
+
+
 def build_databases(environ):
     """環境変数から DATABASES 設定を組み立てる。
 
@@ -116,6 +126,8 @@ def build_databases(environ):
         "sslmode": environ.get("DSQL_SSLMODE", "").strip() or "verify-full",
         # アプリのテーブルは専用スキーマに作成・参照する
         "options": f"-c search_path={schema}",
+        # 接続の確立を待つ上限（秒）。応答できない場合は早めに 503 を返す
+        "connect_timeout": DSQL_CONNECT_TIMEOUT_SECONDS,
     }
     sslrootcert = environ.get("DSQL_SSLROOTCERT", "").strip() or _find_ca_bundle()
     if sslrootcert:
@@ -133,6 +145,12 @@ def build_databases(environ):
             # 書き込み頻度が低いため、キャッシュ 1 で採番順に近い連続した値にする。
             "USE_SEQUENCE_AUTOFIELDS": True,
             "SEQUENCE_CACHE_SIZE": 1,
+            # 接続はリクエストごとに作成し、リクエストの終了時に閉じる（CONN_MAX_AGE=0）。
+            # Lambda では ASGI（Mangum）で Django を動かしており、Django は ASGI の
+            # リクエストごとに別のスレッドで DB にアクセスするため、
+            # スレッド単位の接続はリクエスト間で再利用されない。
+            # 接続ごとに新しい IAM 認証トークンを使うため、トークンの有効期限の影響も受けない。
+            "CONN_MAX_AGE": 0,
         }
     }
 
@@ -143,7 +161,8 @@ DATABASES = build_databases(os.environ)
 # （`migrate --run-syncdb`）。Aurora DSQL が対応しない列型の変更を含む履歴を経由しないため。
 MIGRATION_MODULES = {"auth": None, "contenttypes": None}
 
-LANGUAGE_CODE = "en-us"
+# API のエラーメッセージ（DRF の既定のメッセージを含む）を日本語で返す
+LANGUAGE_CODE = "ja"
 TIME_ZONE = "Asia/Tokyo"
 USE_I18N = True
 USE_TZ = True
@@ -203,6 +222,8 @@ REST_FRAMEWORK = {
     # API のレート制限（環境変数で上書き可能）。
     # カウンタは既定の LocMem キャッシュに保持するため、Lambda ではインスタンス単位の制限となる。
     # 全体の上限は API Gateway 側のスロットリングで担保する。
+    # 未認証のリクエストは REMOTE_ADDR で識別する。core.middleware が CloudFront の
+    # 閲覧者の IP アドレスを設定し、X-Forwarded-For は取り除くため、NUM_PROXIES は指定しない。
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
@@ -213,7 +234,13 @@ REST_FRAMEWORK = {
         # 学習完了の記録（POST /api/progress/complete_lesson/）は個別に厳しめの上限を設定
         "complete_lesson": os.getenv("DJANGO_THROTTLE_COMPLETE_LESSON", "30/min"),
     },
+    # エラー応答を {"detail": ...} 形式の JSON にそろえる（データベースの障害は 503）
+    "EXCEPTION_HANDLER": "core.exceptions.api_exception_handler",
 }
+
+# 本番では JSON のみを返す（ブラウザで確認できる Browsable API は DEBUG 時のみ）
+if not DEBUG:
+    REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = ["rest_framework.renderers.JSONRenderer"]
 
 # ログ設定: エラーや警告をコンソール（Lambda では CloudWatch Logs）へ出力する
 LOGGING = {

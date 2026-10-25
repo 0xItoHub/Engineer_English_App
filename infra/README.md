@@ -36,7 +36,7 @@ terraform apply
 terraform output github_deploy_role_arn
 terraform output lambda_function_name
 terraform output cloudfront_distribution_id
-terraform output api_invoke_url
+terraform output public_base_url
 ```
 
 ロールを引き受けられるのは、指定リポジトリの `main` ブランチ（`ref:refs/heads/main`）または指定した Environment（`environment:production`）で実行されるワークフローのみです。
@@ -60,7 +60,7 @@ terraform output api_invoke_url
 | `AWS_REGION` | 例: `ap-northeast-1` |
 | `ECR_REPOSITORY` | 例: `ee-backend` |
 | `LAMBDA_FUNCTION_NAME` | `terraform output lambda_function_name` の値 |
-| `API_BASE_URL` | `terraform output api_invoke_url` の値（末尾 `/` なし） |
+| `API_BASE_URL` | `terraform output public_base_url` の値（CloudFront の URL、末尾 `/` なし） |
 | `FRONTEND_BUCKET` | フロントエンド用 S3 バケット名（`frontend_bucket_name`） |
 | `CLOUDFRONT_DISTRIBUTION_ID` | `terraform output cloudfront_distribution_id` の値 |
 
@@ -73,7 +73,7 @@ terraform output api_invoke_url
 - **バックエンド**（`core/`、`engineer_english/`、`templates/`、`lambda.py`、`manage.py`、`requirements.txt`、`Dockerfile.lambda` の変更時）
   1. `Dockerfile.lambda` を `linux/amd64` でビルドし、コミット SHA（先頭 12 文字）をタグにして ECR へ push
   2. push したイメージを **ダイジェスト指定**（`<repo>@sha256:...`）で `aws lambda update-function-code` し、更新完了まで待機
-  3. `API_BASE_URL` の `/` と `/api/scenes/` が 200 を返すことを確認（スモークテスト）
+  3. `API_BASE_URL`（CloudFront）の `/` と `/api/scenes/` が 200 を返すことを確認（スモークテスト）
 - **フロントエンド**（`frontend/` の変更時）
   1. Node.js 22 で `npm ci` → `VITE_API_BASE_URL=$API_BASE_URL` を指定して `npm run build`（Vite）
   2. `aws s3 sync build/ s3://$FRONTEND_BUCKET --delete`
@@ -238,3 +238,43 @@ terraform -chdir=infra output -raw cognito_authority
 ローカル開発でログインを試す場合は、`terraform.tfvars` で `enable_local_callbacks = true` を指定して `http://localhost:3000` の URL を登録します（既定では登録しません）。
 
 バックエンド（Lambda）には `COGNITO_USER_POOL_ID` と `COGNITO_APP_CLIENT_ID` が Terraform から設定され、API はアクセストークンを検証します。
+
+## 8. CloudFront 経由のリクエストの確認とレート制限
+
+API は CloudFront の `/api/*` から配信します。CloudFront と API（Django）の間で次の 2 つのヘッダーを使います。
+
+| ヘッダー | 設定する場所 | 内容 |
+|---|---|---|
+| `X-Viewer-IP` | CloudFront Function `<project_name>-api-viewer-ip`（`/api/*` の viewer-request） | 閲覧者の IP アドレス（`event.viewer.ip`）。閲覧者が送った同名のヘッダーは上書きする |
+| `X-Origin-Verify` | API Gateway オリジンのカスタムヘッダー（`cloudfront_frontend.tf`） | Terraform の `random_password` が生成した秘密の値。閲覧者が送った同名のヘッダーは取り除く |
+
+- 同じ秘密の値を Lambda の環境変数 `ORIGIN_VERIFY_SECRET` として渡します。値は Terraform の state にのみ保存され、`plan` / `apply` の出力には `(sensitive value)` と表示されます。
+- Django の `core.middleware.OriginVerifyMiddleware` は、`X-Origin-Verify` が一致しないリクエスト（API Gateway の URL `api_invoke_url` への直接のアクセスなど）に 403 を返します。API・フロントエンドは `public_base_url`（CloudFront）から利用します。API Gateway の URL の `/`（フロントエンドへの転送）も 403 になり、CloudFront の `/` はフロントエンドを返します。
+- 確認できたリクエストでは `X-Viewer-IP` を `REMOTE_ADDR` に設定し、`X-Forwarded-For` / `X-Origin-Verify` / `X-Viewer-IP` を取り除いてからビューに渡します。
+- 管理操作（`{"manage": ...}` の直接呼び出し）は HTTP を経由しないため、この確認の対象外です。
+- CloudFront を使わない構成（`frontend_bucket_name` 未指定）では秘密の値を生成せず、確認も行いません。
+
+### レート制限の単位
+
+| 層 | 単位 | 上限 |
+|---|---|---|
+| API Gateway（`$default` ステージ） | API 全体 | `api_throttling_rate_limit`（既定 20 rps）/ `api_throttling_burst_limit`（既定 50） |
+| Django REST framework | 未認証: 閲覧者の IP アドレス（`REMOTE_ADDR`）/ 認証済み: Cognito のユーザー ID（`sub`） | `DJANGO_THROTTLE_ANON` / `DJANGO_THROTTLE_USER` / `DJANGO_THROTTLE_COMPLETE_LESSON` |
+
+DRF のカウンタは Lambda の実行環境ごとのメモリ（LocMem キャッシュ）に保持するため、上限は実行環境ごとに数えます。
+
+### 秘密の値の更新（ローテーション）
+
+CloudFront の設定の反映には数分かかるため、次の順で更新すると 403 を出さずに切り替えられます。
+
+```bash
+cd infra
+# 1. Lambda 側の確認を止める（CloudFront は引き続き古い値を送る）
+terraform apply -var 'origin_verify_enforced=false'
+# 2. 秘密の値を作り直す（CloudFront に新しい値が設定される）
+terraform apply -var 'origin_verify_enforced=false' -replace='random_password.origin_verify[0]'
+# 3. CloudFront の反映完了を待つ
+aws cloudfront wait distribution-deployed --id "$(terraform output -raw cloudfront_distribution_id)"
+# 4. Lambda 側の確認を再開する（新しい値）
+terraform apply
+```

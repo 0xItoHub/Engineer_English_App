@@ -4,6 +4,8 @@ locals {
   allowed_hosts        = var.allowed_hosts != "" ? var.allowed_hosts : local.api_host
   cors_allowed_origins = var.cors_allowed_origins != "" ? var.cors_allowed_origins : try("https://${aws_cloudfront_distribution.frontend[0].domain_name}", "")
   frontend_url         = try("https://${aws_cloudfront_distribution.frontend[0].domain_name}/", "")
+  # CloudFront 経由の確認に使う秘密の値（CloudFront を使わない構成・確認を無効にした場合は空）
+  origin_verify_secret = sensitive(var.origin_verify_enforced ? try(random_password.origin_verify[0].result, "") : "")
 }
 
 resource "aws_lambda_function" "backend" {
@@ -31,6 +33,8 @@ resource "aws_lambda_function" "backend" {
       DSQL_CLUSTER_ENDPOINT = local.dsql_endpoint
       SQLITE_PATH           = var.sqlite_path
       STARTUP_COPY_SEED_DB  = var.startup_copy_seed_db
+      # CloudFront がオリジンのカスタムヘッダー X-Origin-Verify で送る値（plan の出力では非表示）
+      ORIGIN_VERIFY_SECRET = local.origin_verify_secret
     }
   }
 

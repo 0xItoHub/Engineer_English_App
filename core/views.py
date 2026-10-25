@@ -1,5 +1,6 @@
 import os
 
+from django.db.models import Prefetch
 from django.shortcuts import redirect
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
@@ -11,6 +12,7 @@ from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from .db import RetryExhausted, run_in_transaction_with_retry
 from .models import Dialogue, Lesson, Phrase, Scene, UserProgress
 from .serializers import (
+    CompleteLessonSerializer,
     DialogueSerializer,
     LessonDetailSerializer,
     LessonSerializer,
@@ -22,6 +24,9 @@ from .throttles import CompleteLessonRateThrottle
 
 # PositiveIntegerField に保存できる上限（PostgreSQL の integer 型の最大値）
 MAX_POSITIVE_INT = 2_147_483_647
+
+# 競合が続いて記録できなかった場合のメッセージ
+BUSY_DETAIL = "混み合っているため記録できませんでした。時間をおいて再度お試しください"
 
 
 def _int_query_param(request, name):
@@ -54,8 +59,13 @@ class LessonSceneFilterMixin:
 
 # 学習コンテンツは読み取り専用で公開する（内容は seed コマンドで投入・更新する）
 class SceneViewSet(viewsets.ReadOnlyModelViewSet):
-    # ネストしたフレーズ・対話・レッスンをまとめて取得し、シーン数に依存しないクエリ数にする
-    queryset = Scene.objects.prefetch_related("phrases", "dialogues", "lessons")
+    # ネストしたフレーズ・対話・レッスンをまとめて取得し、シーン数に依存しないクエリ数にする。
+    # ネストした一覧も並び順を明示して、応答の順序を一定にする
+    queryset = Scene.objects.prefetch_related(
+        Prefetch("phrases", queryset=Phrase.objects.order_by("id")),
+        Prefetch("dialogues", queryset=Dialogue.objects.order_by("order", "id")),
+        Prefetch("lessons", queryset=Lesson.objects.order_by("id")),
+    )
     serializer_class = SceneSerializer
 
 
@@ -76,7 +86,10 @@ class LessonViewSet(viewsets.ReadOnlyModelViewSet):
         qs = super().get_queryset()
         # 詳細取得ではレッスン内のフレーズ・対話をまとめて取得する
         if getattr(self, "action", None) == "retrieve":
-            qs = qs.prefetch_related("lesson_phrases", "lesson_dialogues")
+            qs = qs.prefetch_related(
+                Prefetch("lesson_phrases", queryset=Phrase.objects.order_by("id")),
+                Prefetch("lesson_dialogues", queryset=Dialogue.objects.order_by("order", "id")),
+            )
         return qs
 
     def get_serializer_class(self):
@@ -121,29 +134,16 @@ class UserProgressViewSet(
     )
     def complete_lesson(self, request):
         # 入力の検証・型変換（不正値は 500 ではなく 400 を返す）
-        if not isinstance(request.data, dict):
-            return Response(
-                {"error": "リクエスト本文はオブジェクト形式で指定してください"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        try:
-            lesson_id = int(request.data.get("lesson_id"))
-        except (TypeError, ValueError):
-            return Response(
-                {"error": "lesson_id は整数で指定してください"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        try:
-            score = int(request.data.get("score", 0))
-            time_spent = int(request.data.get("time_spent", 0))
-        except (TypeError, ValueError):
-            return Response(
-                {"error": "score / time_spent は整数で指定してください"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        params = CompleteLessonSerializer(data=request.data)
+        params.is_valid(raise_exception=True)
+        lesson_id = params.validated_data["lesson_id"]
+        score = params.validated_data["score"]
+        time_spent = params.validated_data["time_spent"]
 
-        if not 0 < lesson_id <= MAX_POSITIVE_INT:
-            return Response({"error": "レッスンが見つかりません"}, status=status.HTTP_404_NOT_FOUND)
+        if lesson_id > MAX_POSITIVE_INT:
+            return Response(
+                {"detail": "レッスンが見つかりません"}, status=status.HTTP_404_NOT_FOUND
+            )
 
         # スコアを 0〜100 に、学習時間を 0〜保存可能な上限に制限
         score = min(max(0, score), 100)
@@ -152,7 +152,9 @@ class UserProgressViewSet(
         try:
             lesson = Lesson.objects.select_related("scene").get(id=lesson_id)
         except Lesson.DoesNotExist:
-            return Response({"error": "レッスンが見つかりません"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "レッスンが見つかりません"}, status=status.HTTP_404_NOT_FOUND
+            )
 
         if not request.user.is_authenticated:
             return Response(
@@ -169,26 +171,27 @@ class UserProgressViewSet(
                 lambda: _record_progress(request.user, lesson, score, time_spent)
             )
         except RetryExhausted:
-            return Response(
-                {"error": "混み合っているため記録できませんでした。時間をおいて再度お試しください"},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
+            return Response({"detail": BUSY_DETAIL}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         serializer = self.get_serializer(progress)
         return Response(serializer.data)
 
 
 def _record_progress(user, lesson, score, time_spent):
-    """学習の完了を記録する（最高スコアを保持し、学習時間は最新の値に更新する）。"""
-    progress, created = UserProgress.objects.get_or_create(
-        user_sub=user.sub,
-        lesson=lesson,
-        defaults={"username": user.username, "score": score, "time_spent": time_spent},
-    )
-    if not created:
-        progress.score = max(progress.score, score)
-        progress.time_spent = time_spent
-        progress.username = user.username or progress.username
-        progress.save(update_fields=["score", "time_spent", "username"])
+    """学習の完了を記録する（最高スコアを保持し、学習時間は最新の値に更新する）。
+
+    run_in_transaction_with_retry の中で呼び出す。Aurora DSQL はセーブポイントに対応しないため、
+    get_or_create（作成の競合時にセーブポイントまで戻す）は使わず、検索と作成を分けて行う。
+    同時に同じ記録が作成された場合は一意制約の IntegrityError となり、
+    トランザクション全体をやり直すと既存の記録の更新として成功する。
+    """
+    progress = UserProgress.objects.filter(user_sub=user.sub, lesson=lesson).first()
+    if progress is None:
+        return UserProgress.objects.create(
+            user_sub=user.sub, lesson=lesson, score=score, time_spent=time_spent
+        )
+    progress.score = max(progress.score, score)
+    progress.time_spent = time_spent
+    progress.save(update_fields=["score", "time_spent"])
     return progress
 
 

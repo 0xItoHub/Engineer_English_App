@@ -4,6 +4,10 @@ from django.db import models
 class Scene(models.Model):
     title = models.CharField(max_length=120)
 
+    class Meta:
+        # 一覧の並び順を ID 順に固定する
+        ordering = ["id"]
+
     def __str__(self):
         return self.title
 
@@ -12,6 +16,9 @@ class Lesson(models.Model):
     scene = models.ForeignKey(Scene, on_delete=models.CASCADE, related_name="lessons")
     title = models.CharField(max_length=120)
     description = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["id"]
 
     def __str__(self):
         return self.title
@@ -30,6 +37,9 @@ class Phrase(models.Model):
     text_en = models.CharField(max_length=255)
     text_ja = models.CharField(max_length=255)
     note = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["id"]
 
     def __str__(self):
         return self.text_en
@@ -51,7 +61,8 @@ class Dialogue(models.Model):
     order = models.PositiveIntegerField()
 
     class Meta:
-        ordering = ["order"]
+        # 表示順（order）が同じ場合は ID 順に並べる
+        ordering = ["order", "id"]
 
     def __str__(self):
         return f"{self.order}: {self.speaker}"
@@ -61,7 +72,7 @@ class UserProgress(models.Model):
     # 外部の認証基盤が発行するユーザー ID（ID トークンの sub）で本人を識別する。
     # 検索には (user_sub, lesson) の一意制約のインデックスを使う
     user_sub = models.CharField(max_length=255)
-    # 表示用のユーザー名（記録時点の値）
+    # ユーザー名の列（API の応答には含めず、新しい記録では保存しない。スキーマは現状のまま維持する）
     username = models.CharField(max_length=150, blank=True)
     lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, related_name="user_progress")
     completed_at = models.DateTimeField(auto_now_add=True)
@@ -74,7 +85,8 @@ class UserProgress(models.Model):
                 fields=["user_sub", "lesson"], name="core_userprogress_unique_user_lesson"
             )
         ]
-        ordering = ["-completed_at"]
+        # 新しい順。完了日時が同じ場合は ID の降順に並べる
+        ordering = ["-completed_at", "-id"]
 
     def __str__(self):
         completed = self.completed_at.strftime("%Y-%m-%d")

@@ -102,3 +102,20 @@ def test_failed_attempt_is_rolled_back():
     # 1 回目の書き込みは取り消され、2 回目の分だけが残る
     assert run_in_transaction_with_retry(func) == 1
     assert list(Scene.objects.values_list("title", flat=True)) == ["try 1"]
+
+
+def test_context_chain_is_also_detected():
+    # 例外の処理中に別の例外が発生した場合（__context__）も元の SQLSTATE を参照する
+    error = OperationalError("wrapped")
+    error.__context__ = _DriverError("40001")
+
+    assert is_retryable_error(error)
+
+
+def test_cyclic_error_chain_terminates():
+    first = OperationalError("first")
+    second = OperationalError("second")
+    first.__context__ = second
+    second.__context__ = first
+
+    assert not is_retryable_error(first)
