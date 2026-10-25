@@ -16,13 +16,16 @@ import CloseIcon from "@mui/icons-material/Close";
 import SendIcon from "@mui/icons-material/Send";
 import { ChatMessage, createDummyClient } from "../hooks/useChatClient";
 
+// 現在は入力内容をそのまま返すデモであることを、最初のメッセージで伝える
+export const DEMO_GREETING = "現在は入力内容をそのまま返すデモです。AI による回答は今後対応予定です。";
+
 const ChatWidget: React.FC = () => {
   const client = useMemo(() => createDummyClient(), []);
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
-    { id: "sys-hello", role: "assistant", content: "こんにちは！英語学習をお手伝いします。なんでも聞いてください。" },
+    { id: "sys-hello", role: "assistant", content: DEMO_GREETING },
   ]);
 
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -60,12 +63,21 @@ const ChatWidget: React.FC = () => {
     <>
       <Fab
         color="primary"
-        aria-label="AIチャットを開く"
+        aria-label="AI チャット（デモ）を開く"
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={open ? "chat-dialog" : undefined}
         onClick={() => setOpen(true)}
-        sx={{ position: "fixed", right: 24, bottom: 24, zIndex: 1300 }}
+        // スマートフォンでは小さめにして画面の端に寄せ、本文に重なりにくくする
+        sx={{
+          position: "fixed",
+          right: { xs: 16, sm: 24 },
+          bottom: { xs: 16, sm: 24 },
+          width: { xs: 48, sm: 56 },
+          height: { xs: 48, sm: 56 },
+          minHeight: 0,
+          zIndex: 1300,
+        }}
       >
         <ChatIcon />
       </Fab>
@@ -77,12 +89,20 @@ const ChatWidget: React.FC = () => {
           role="dialog"
           aria-modal="true"
           aria-labelledby="chat-dialog-title"
-          sx={{ position: "fixed", right: 24, bottom: 96, width: { xs: '90vw', sm: 420 }, height: { xs: '70vh', sm: '70vh' }, outline: 'none' }}
+          sx={{
+            position: "fixed",
+            right: { xs: 16, sm: 24 },
+            bottom: { xs: 80, sm: 96 },
+            width: { xs: 'calc(100vw - 32px)', sm: 420 },
+            height: '70vh',
+            maxHeight: { xs: 'calc(100vh - 112px)', sm: 'calc(100vh - 128px)' },
+            outline: 'none',
+          }}
         >
           <Paper elevation={6} sx={{ p: 1.5, display: 'flex', flexDirection: 'column', height: '100%' }}>
             <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-              <Typography id="chat-dialog-title" variant="subtitle1" component="h2" sx={{ fontWeight: 600 }}>AI Chat</Typography>
-              <IconButton size="small" onClick={close} aria-label="チャットを閉じる"><CloseIcon /></IconButton>
+              <Typography id="chat-dialog-title" variant="subtitle1" component="h2" sx={{ fontWeight: 600 }}>AI チャット（デモ）</Typography>
+              <IconButton onClick={close} aria-label="チャットを閉じる"><CloseIcon /></IconButton>
             </Stack>
             <Divider />
             <Box
@@ -136,7 +156,7 @@ const ChatWidget: React.FC = () => {
               />
               <Tooltip title="送信">
                 <span>
-                  <IconButton color="primary" onClick={send} disabled={busy} aria-label="送信" sx={{ alignSelf: 'center' }}>
+                  <IconButton size="large" color="primary" onClick={send} disabled={busy} aria-label="送信" sx={{ alignSelf: 'center' }}>
                     <SendIcon />
                   </IconButton>
                 </span>

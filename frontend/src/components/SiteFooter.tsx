@@ -6,7 +6,8 @@ const SiteFooter: React.FC = () => {
   const year = new Date().getFullYear();
   return (
     <Box component="footer" sx={{ mt: 8, borderTop: (theme) => `1px solid ${theme.palette.divider}`, bgcolor: 'background.paper' }}>
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      {/* スマートフォンでは右下のチャットボタンに重ならないよう、下側の余白を広げる */}
+      <Container maxWidth="lg" sx={{ pt: 4, pb: { xs: 11, sm: 4 } }}>
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           spacing={2}
