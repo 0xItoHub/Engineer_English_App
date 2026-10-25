@@ -105,6 +105,8 @@ resource "aws_cloudfront_distribution" "frontend" {
     cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
     origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
     compress                 = true
+    # セキュリティ関連のレスポンスヘッダー（security_headers.tf）
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.api[0].id
 
     function_association {
       event_type   = "viewer-request"
@@ -117,6 +119,8 @@ resource "aws_cloudfront_distribution" "frontend" {
     cached_methods         = ["GET", "HEAD"]
     target_origin_id       = "s3-frontend"
     viewer_protocol_policy = "redirect-to-https"
+    # セキュリティ関連のレスポンスヘッダーと CSP（security_headers.tf）
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.frontend[0].id
 
     forwarded_values {
       query_string = false

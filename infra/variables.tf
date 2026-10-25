@@ -73,3 +73,9 @@ variable "enable_local_callbacks" {
   default     = false
   description = "Cognito のアプリクライアントにローカル開発用（http://localhost:3000）の URL を登録する"
 }
+
+variable "csp_enforce" {
+  type        = bool
+  default     = false
+  description = "true にすると CSP を Content-Security-Policy として適用する。false（既定）は Content-Security-Policy-Report-Only で違反の報告のみ行う"
+}

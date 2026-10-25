@@ -278,3 +278,61 @@ aws cloudfront wait distribution-deployed --id "$(terraform output -raw cloudfro
 # 4. Lambda 側の確認を再開する（新しい値）
 terraform apply
 ```
+
+## 9. セキュリティヘッダーと Content Security Policy（CSP）
+
+`infra/security_headers.tf` の CloudFront レスポンスヘッダーポリシーで、次のヘッダーを付与します。
+
+| 対象 | ヘッダー | 値 |
+| --- | --- | --- |
+| フロントエンド・API | `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` |
+| フロントエンド・API | `X-Content-Type-Options` | `nosniff` |
+| フロントエンド・API | `X-Frame-Options` | `DENY` |
+| フロントエンド・API | `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| フロントエンド | `Content-Security-Policy-Report-Only`（`csp_enforce = true` のときは `Content-Security-Policy`） | 下記 |
+| フロントエンド | `Permissions-Policy` | `camera=(), microphone=(), geolocation=(), payment=(), usb=()` |
+
+API（`/api/*`）は JSON を返すため CSP は付与せず、Django（`SecurityMiddleware` など）が設定したヘッダーがある場合はそちらを優先します（`override = false`）。
+
+CSP は Terraform のリソース（リージョン・Cognito のドメイン・API Gateway のエンドポイント）から組み立てます。
+
+```text
+default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+font-src 'self' https://fonts.gstatic.com; img-src 'self' data:;
+connect-src 'self' https://<api-id>.execute-api.<region>.amazonaws.com https://cognito-idp.<region>.amazonaws.com https://<prefix>.auth.<region>.amazoncognito.com;
+frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; report-uri /api/csp-report/
+```
+
+`csp_enforce = true` のときは、末尾に `upgrade-insecure-requests` も加わります（レポートのみのモードではブラウザが無視するため）。
+
+### 8-1. 違反レポートの確認
+
+ブラウザは CSP の違反を `POST /api/csp-report/` に送信し、Django が要点のみを 1 行のログ（WARNING）に記録します。
+
+```text
+csp_violation directive=img-src blocked=https://img.example.com document=/scene/1 disposition=report
+```
+
+- 記録するのは、ディレクティブ・ブロックされたリソースのオリジン（`data:` などはスキームのみ）・ページのパス・処理の種類のみです。クエリ文字列やレポート本文全体は記録せず、データベースにも保存しません。
+- 本文は 8 KB まで（超える場合は 413）、IP 単位で 30 回/分まで受け付けます（環境変数 `DJANGO_THROTTLE_CSP_REPORT` で変更可能）。
+
+CloudWatch Logs Insights でロググループ `/aws/lambda/<project_name>-api` を選び、次のクエリで集計できます。
+
+```text
+fields @timestamp, @message
+| filter @message like /csp_violation/
+| parse @message "directive=* blocked=* document=* disposition=*" as directive, blocked, document, disposition
+| stats count(*) as reports by directive, blocked
+| sort reports desc
+```
+
+### 8-2. CSP の適用（レポートのみ → ブロック）
+
+既定（`csp_enforce = false`）では違反をブロックせず、報告のみを行います。
+一定期間レポートを確認し、正常な画面操作（ログイン・ログアウト・学習・読み上げ）で違反が出ていないことを確かめてから、`terraform.tfvars` に次の 1 行を追加して `terraform apply` します。
+
+```hcl
+csp_enforce = true
+```
+
+ヘッダー名が `Content-Security-Policy` に切り替わり、ポリシーに反する読み込みがブロックされます。元に戻す場合は `false` にして再度 `apply` します。
