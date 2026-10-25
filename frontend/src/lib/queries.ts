@@ -138,11 +138,12 @@ export async function postCompleteLesson({ lessonId, score, timeSpent }: Complet
 
 // ---- フック ----
 
-// シーン一覧（ホーム・学習履歴で共有）
-export function useScenesQuery() {
+// シーン一覧（ホーム・学習履歴・レッスン完了後の案内で共有）
+export function useScenesQuery(options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: queryKeys.scenes,
     queryFn: ({ signal }) => fetchScenes(signal),
+    enabled: options.enabled ?? true,
   });
 }
 

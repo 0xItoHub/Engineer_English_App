@@ -1,5 +1,5 @@
 import { vi, type Mocked } from 'vitest';
-import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import axios from 'axios';
 import LessonDetail from './LessonDetail';
@@ -300,7 +300,7 @@ test('レッスン内の進捗は現在のステップの位置で表示し、�
   expect(screen.getByRole('progressbar', { name: 'レッスンの進捗' })).toHaveAttribute('aria-valuenow', '100');
 });
 
-test('「レッスン完了」は 1 回だけ送信し、完了後はボタンを無効にする', async () => {
+test('「レッスン完了」は 1 回だけ送信し、完了後は学習履歴へ自動で移動せずに次の行動を案内する', async () => {
   mockLessonApi();
   mockedAxios.post.mockResolvedValue({ status: 200, data: { ok: true } });
   renderLessonDetail();
@@ -314,6 +314,102 @@ test('「レッスン完了」は 1 回だけ送信し、完了後はボタン�
 
   expect(await screen.findByText('レッスンを完了しました！')).toBeInTheDocument();
   expect(mockedAxios.post).toHaveBeenCalledTimes(1);
-  expect(screen.getByRole('button', { name: '完了しました' })).toBeDisabled();
-  expect(await screen.findByText('progress page', {}, { timeout: 3000 })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'レッスン完了' })).not.toBeInTheDocument();
+  const panel = screen.getByRole('region', { name: 'レッスンを完了しました' });
+  expect(screen.getByRole('heading', { level: 2, name: 'レッスンを完了しました' })).toHaveFocus();
+  expect(within(panel).getByRole('link', { name: 'シーンに戻る' })).toHaveAttribute('href', '/scene/1');
+  expect(within(panel).getByRole('link', { name: '学習履歴を見る' })).toHaveAttribute('href', '/progress');
+  // シーン一覧を取得できない場合は次の学習先を表示しない
+  expect(within(panel).queryByRole('link', { name: /次の/ })).not.toBeInTheDocument();
+
+  await new Promise((r) => setTimeout(r, 1500));
+  expect(screen.queryByText('progress page')).not.toBeInTheDocument();
+});
+
+const scenesWithLessons = [
+  { id: 1, title: 'Daily Standup', lessons: [{ id: 5, title: 'Daily report', description: '' }, { id: 6, title: 'Blockers', description: '' }] },
+  { id: 2, title: 'Code Review', lessons: [{ id: 7, title: 'LGTM', description: '' }] },
+];
+
+async function completeCurrentLesson() {
+  fireEvent.click(await screen.findByRole('button', { name: '次へ' }));
+  fireEvent.click(screen.getByRole('button', { name: '次へ' }));
+  fireEvent.click(screen.getByRole('button', { name: '次へ' }));
+  fireEvent.click(screen.getByRole('button', { name: 'レッスン完了' }));
+  return screen.findByRole('region', { name: 'レッスンを完了しました' });
+}
+
+test('「次のレッスンへ」で同じシーンの次のレッスンを最初のステップから始める', async () => {
+  const nextLesson = { ...lesson, id: 6, title: 'Blockers' };
+  mockedAxios.get.mockImplementation((url: string) => {
+    if (url.endsWith('/api/lessons/5/')) return Promise.resolve({ data: lesson });
+    if (url.endsWith('/api/lessons/6/')) return Promise.resolve({ data: nextLesson });
+    if (url.endsWith('/api/scenes/')) return Promise.resolve({ data: scenesWithLessons });
+    return Promise.reject(new Error('unexpected'));
+  });
+  mockedAxios.post.mockResolvedValue({ status: 200, data: { ok: true } });
+  renderLessonDetail();
+
+  const panel = await completeCurrentLesson();
+  const next = await within(panel).findByRole('link', { name: '次のレッスンへ: Blockers' });
+  expect(next).toHaveAttribute('href', '/lesson/6');
+  fireEvent.click(next);
+
+  expect(await screen.findByRole('heading', { level: 1, name: /Blockers/ })).toBeInTheDocument();
+  expect(progressText()).toBe('進捗: 0%');
+  expect(screen.getByRole('button', { name: '次へ' })).toBeInTheDocument();
+  expect(screen.queryByRole('region', { name: 'レッスンを完了しました' })).not.toBeInTheDocument();
+});
+
+test('シーンの最後のレッスンでは「次のシーンへ」を表示し、最後のシーンでは表示しない', async () => {
+  const lastInScene = { ...lesson, id: 6, title: 'Blockers' };
+  const lastLesson = { ...lesson, id: 7, title: 'LGTM', scene: 2 };
+  mockedAxios.get.mockImplementation((url: string) => {
+    if (url.endsWith('/api/lessons/6/')) return Promise.resolve({ data: lastInScene });
+    if (url.endsWith('/api/lessons/7/')) return Promise.resolve({ data: lastLesson });
+    if (url.endsWith('/api/scenes/')) return Promise.resolve({ data: scenesWithLessons });
+    return Promise.reject(new Error('unexpected'));
+  });
+  mockedAxios.post.mockResolvedValue({ status: 200, data: { ok: true } });
+
+  const { unmount } = renderLessonDetail('/lesson/6');
+  let panel = await completeCurrentLesson();
+  expect(await within(panel).findByRole('link', { name: '次のシーンへ: Code Review' })).toHaveAttribute('href', '/scene/2');
+  unmount();
+
+  renderLessonDetail('/lesson/7');
+  panel = await completeCurrentLesson();
+  expect(within(panel).getByRole('link', { name: 'シーンに戻る' })).toHaveAttribute('href', '/scene/2');
+  expect(within(panel).queryByRole('link', { name: /次の/ })).not.toBeInTheDocument();
+});
+
+test('まとめでは完了前に学んだフレーズと対話を振り返り、完了の案内は「レッスン完了」の後に表示する', async () => {
+  mockLessonApi();
+  renderLessonDetail();
+
+  fireEvent.click(await screen.findByRole('button', { name: '次へ' }));
+  fireEvent.click(screen.getByRole('button', { name: '次へ' }));
+  fireEvent.click(screen.getByRole('button', { name: '次へ' }));
+
+  expect(screen.queryByText(/完了です/)).not.toBeInTheDocument();
+  expect(screen.queryByRole('region', { name: 'レッスンを完了しました' })).not.toBeInTheDocument();
+  const phrases = screen.getByRole('region', { name: 'フレーズ' });
+  expect(within(phrases).getByText('I fixed the bug.')).toBeInTheDocument();
+  expect(within(phrases).getByRole('button', { name: 'I fixed the bug.（音声読み上げ非対応）' })).toBeInTheDocument();
+  const dialogues = screen.getByRole('region', { name: '対話' });
+  expect(within(dialogues).getByText('Any blockers?')).toBeInTheDocument();
+});
+
+test('ステップを切り替えると、そのステップの見出しへフォーカスを移して進み具合を伝える', async () => {
+  mockLessonApi();
+  renderLessonDetail();
+
+  await screen.findByRole('heading', { level: 1, name: /Daily report/ });
+  // 最初の表示ではフォーカスを移さない
+  expect(screen.getByRole('heading', { level: 2, name: /レッスン概要/ })).not.toHaveFocus();
+  fireEvent.click(screen.getByRole('button', { name: '次へ' }));
+  expect(screen.getByRole('heading', { level: 2, name: /フレーズ学習/ })).toHaveFocus();
+  expect(screen.getByText('ステップ 2 / 4: フレーズ学習')).toHaveAttribute('aria-live', 'polite');
+  fireEvent.click(screen.getByRole('button', { name: '前へ' }));
+  expect(screen.getByRole('heading', { level: 2, name: /レッスン概要/ })).toHaveFocus();
 });
