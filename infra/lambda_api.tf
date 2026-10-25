@@ -31,8 +31,10 @@ resource "aws_lambda_function" "backend" {
       COGNITO_APP_CLIENT_ID = aws_cognito_user_pool_client.spa.id
       # Aurora DSQL のエンドポイント（接続はアプリ用ロールで IAM 認証）
       DSQL_CLUSTER_ENDPOINT = local.dsql_endpoint
-      SQLITE_PATH           = var.sqlite_path
-      STARTUP_COPY_SEED_DB  = var.startup_copy_seed_db
+      # 接続するデータベースロール（既定は DML のみの実行時ロール app_rw）
+      DSQL_DB_USER         = var.web_db_user
+      SQLITE_PATH          = var.sqlite_path
+      STARTUP_COPY_SEED_DB = var.startup_copy_seed_db
       # CloudFront がオリジンのカスタムヘッダー X-Origin-Verify で送る値（plan の出力では非表示）
       ORIGIN_VERIFY_SECRET = local.origin_verify_secret
     }

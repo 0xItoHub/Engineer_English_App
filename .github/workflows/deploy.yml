@@ -146,6 +146,20 @@ jobs:
             --function-name "${LAMBDA_FUNCTION_NAME}" \
             --query '{State: State, LastUpdateStatus: LastUpdateStatus}' --output table
 
+      # 管理専用の関数（migrator）も同じイメージに揃え、新しいマイグレーションを実行できるようにする
+      - name: Update migrator function code
+        if: vars.MIGRATOR_FUNCTION_NAME != ''
+        env:
+          IMAGE_URI: ${{ steps.image.outputs.image_uri }}
+          MIGRATOR_FUNCTION_NAME: ${{ vars.MIGRATOR_FUNCTION_NAME }}
+        run: |
+          set -euo pipefail
+          aws lambda update-function-code \
+            --function-name "${MIGRATOR_FUNCTION_NAME}" \
+            --image-uri "${IMAGE_URI}" \
+            --query 'LastUpdateStatus' --output text
+          aws lambda wait function-updated-v2 --function-name "${MIGRATOR_FUNCTION_NAME}"
+
       - name: Smoke test
         run: |
           set -euo pipefail

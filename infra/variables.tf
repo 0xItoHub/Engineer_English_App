@@ -79,3 +79,55 @@ variable "csp_enforce" {
   default     = false
   description = "true にすると CSP を Content-Security-Policy として適用する。false（既定）は Content-Security-Policy-Report-Only で違反の報告のみ行う"
 }
+
+# データベースロールの分離（infra/README.md の「データベースロールの分離」参照）
+variable "web_db_user" {
+  type        = string
+  default     = "app"
+  description = "Web 用の Lambda が接続するデータベースロール。実行時ロール app_rw の作成と権限付与の後に app_rw を指定する（infra/README.md 参照）"
+
+  validation {
+    condition     = can(regex("^[a-z_][a-z0-9_]{0,62}$", var.web_db_user)) && var.web_db_user != "admin"
+    error_message = "web_db_user は英小文字・数字・_ で指定してください（admin 以外）。"
+  }
+}
+
+variable "runtime_db_user" {
+  type        = string
+  default     = "app_rw"
+  description = "管理専用の Lambda（migrator）が DML の権限を付与する実行時ロール"
+
+  validation {
+    condition     = can(regex("^[a-z_][a-z0-9_]{0,62}$", var.runtime_db_user)) && var.runtime_db_user != "admin"
+    error_message = "runtime_db_user は英小文字・数字・_ で指定してください（admin 以外）。"
+  }
+}
+
+variable "migrator_db_user" {
+  type        = string
+  default     = "app"
+  description = "管理専用の Lambda（migrator）が接続するデータベースロール（テーブルの所有者）"
+
+  validation {
+    condition     = can(regex("^[a-z_][a-z0-9_]{0,62}$", var.migrator_db_user)) && var.migrator_db_user != "admin"
+    error_message = "migrator_db_user は英小文字・数字・_ で指定してください（admin 以外）。"
+  }
+}
+
+# Aurora DSQL のバックアップ（backup.tf）
+variable "enable_backup" {
+  type        = bool
+  default     = false
+  description = "true にすると AWS Backup で Aurora DSQL クラスターを毎日バックアップする"
+}
+
+variable "backup_retention_days" {
+  type        = number
+  default     = 14
+  description = "バックアップの保持日数"
+
+  validation {
+    condition     = var.backup_retention_days >= 1
+    error_message = "backup_retention_days は 1 以上を指定してください。"
+  }
+}
