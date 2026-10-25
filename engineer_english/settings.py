@@ -85,6 +85,10 @@ def _find_ca_bundle(candidates=CA_BUNDLE_CANDIDATES):
     return next((path for path in candidates if os.path.isfile(path)), None)
 
 
+# Aurora DSQL への接続確立のタイムアウト（秒）
+DSQL_CONNECT_TIMEOUT_SECONDS = 5
+
+
 def build_databases(environ):
     """環境変数から DATABASES 設定を組み立てる。
 
@@ -116,6 +120,8 @@ def build_databases(environ):
         "sslmode": environ.get("DSQL_SSLMODE", "").strip() or "verify-full",
         # アプリのテーブルは専用スキーマに作成・参照する
         "options": f"-c search_path={schema}",
+        # 接続の確立を待つ上限（秒）。応答できない場合は早めに 503 を返す
+        "connect_timeout": DSQL_CONNECT_TIMEOUT_SECONDS,
     }
     sslrootcert = environ.get("DSQL_SSLROOTCERT", "").strip() or _find_ca_bundle()
     if sslrootcert:
@@ -133,6 +139,12 @@ def build_databases(environ):
             # 書き込み頻度が低いため、キャッシュ 1 で採番順に近い連続した値にする。
             "USE_SEQUENCE_AUTOFIELDS": True,
             "SEQUENCE_CACHE_SIZE": 1,
+            # 接続はリクエストごとに作成し、リクエストの終了時に閉じる（CONN_MAX_AGE=0）。
+            # Lambda では ASGI（Mangum）で Django を動かしており、Django は ASGI の
+            # リクエストごとに別のスレッドで DB にアクセスするため、
+            # スレッド単位の接続はリクエスト間で再利用されない。
+            # 接続ごとに新しい IAM 認証トークンを使うため、トークンの有効期限の影響も受けない。
+            "CONN_MAX_AGE": 0,
         }
     }
 
@@ -217,6 +229,10 @@ REST_FRAMEWORK = {
     # エラー応答を {"detail": ...} 形式の JSON にそろえる（データベースの障害は 503）
     "EXCEPTION_HANDLER": "core.exceptions.api_exception_handler",
 }
+
+# 本番では JSON のみを返す（ブラウザで確認できる Browsable API は DEBUG 時のみ）
+if not DEBUG:
+    REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = ["rest_framework.renderers.JSONRenderer"]
 
 # ログ設定: エラーや警告をコンソール（Lambda では CloudWatch Logs）へ出力する
 LOGGING = {

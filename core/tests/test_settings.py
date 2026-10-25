@@ -34,7 +34,10 @@ def test_dsql_is_used_with_endpoint(monkeypatch):
         "region": "us-east-1",
         "sslmode": "verify-full",
         "options": "-c search_path=app",
+        "connect_timeout": 5,
     }
+    # 接続はリクエストごとに作成・終了する（ASGI ではリクエスト間で接続を共有しない）
+    assert db["CONN_MAX_AGE"] == 0
     # パスワードは保持せず、接続のたびに IAM 認証トークンを生成する
     assert "PASSWORD" not in db
 
@@ -83,3 +86,27 @@ def test_find_ca_bundle_returns_first_existing_file(tmp_path):
 
     assert _find_ca_bundle((str(tmp_path / "missing.pem"), str(bundle))) == str(bundle)
     assert _find_ca_bundle((str(tmp_path / "missing.pem"),)) is None
+
+
+def test_dsql_connection_params_reach_the_driver(monkeypatch):
+    """接続のタイムアウトがドライバ（psycopg）の接続パラメータとして渡ることを確認する。"""
+    from aurora_dsql_django.base import DatabaseWrapper
+
+    monkeypatch.setattr(project_settings, "_find_ca_bundle", lambda: None)
+    settings_dict = build_databases({"DSQL_CLUSTER_ENDPOINT": ENDPOINT})["default"]
+    settings_dict.update({"TIME_ZONE": None, "AUTOCOMMIT": True, "ATOMIC_REQUESTS": False})
+    settings_dict.setdefault("PASSWORD", "")
+    settings_dict.setdefault("TEST", {})
+
+    params = DatabaseWrapper(settings_dict).get_connection_params()
+
+    assert params["connect_timeout"] == 5
+    assert params["host"] == ENDPOINT
+    assert params["region"] == "ap-northeast-1"
+
+
+def test_production_renders_json_only(settings):
+    # テストは DEBUG=False の設定を読み込む
+    assert settings.REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] == [
+        "rest_framework.renderers.JSONRenderer"
+    ]
