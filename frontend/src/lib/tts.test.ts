@@ -1,4 +1,4 @@
-import { isEnglishVoice, pickEnglishVoice, utteranceLang } from './tts';
+import { getAudioClip, isEnglishVoice, normalizeSpeechText, pickEnglishVoice, preservePitch, utteranceLang } from './tts';
 
 const v = (name: string, lang: string) => ({ name, lang });
 
@@ -30,4 +30,29 @@ test('lang が en で始まる音声のみ英語として扱う', () => {
   expect(isEnglishVoice(v('a', 'EN-us'))).toBe(true);
   expect(isEnglishVoice(v('a', 'eng'))).toBe(false);
   expect(isEnglishVoice(v('a', ''))).toBe(false);
+});
+
+test('事前に生成した音声は、空白を正規化した英文で探す', () => {
+  const clips = { "Let's align on the goal.": '/audio/aaaa.mp3' };
+  expect(getAudioClip("  Let's   align on\nthe goal. ", clips)).toBe('/audio/aaaa.mp3');
+  expect(getAudioClip('Unknown sentence.', clips)).toBeUndefined();
+  expect(getAudioClip('constructor', clips)).toBeUndefined();
+  expect(getAudioClip('   ', clips)).toBeUndefined();
+  expect(normalizeSpeechText(' a \t b ')).toBe('a b');
+});
+
+test('seed の英文には生成済みの音声がある', () => {
+  expect(getAudioClip("Let's align on the goal and scope.")).toMatch(/^\/audio\/[0-9a-f]{16}\.mp3$/);
+});
+
+test('速度を変えても声の高さを保つ（接頭辞付きの指定にも対応）', () => {
+  const standard = { preservesPitch: false };
+  preservePitch(standard as unknown as HTMLMediaElement);
+  expect(standard.preservesPitch).toBe(true);
+  const webkit = { webkitPreservesPitch: false };
+  preservePitch(webkit as unknown as HTMLMediaElement);
+  expect(webkit.webkitPreservesPitch).toBe(true);
+  const moz = { mozPreservesPitch: false };
+  preservePitch(moz as unknown as HTMLMediaElement);
+  expect(moz.mozPreservesPitch).toBe(true);
 });

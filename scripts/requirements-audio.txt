@@ -1,0 +1,4 @@
+# 読み上げ音声の生成（scripts/generate_audio.py）に使う依存（開発用。アプリの実行には不要）
+# 使い方は DEVELOPMENT.md の「読み上げ音声の生成」を参照
+kokoro-onnx==0.4.7
+soundfile==0.14.0
