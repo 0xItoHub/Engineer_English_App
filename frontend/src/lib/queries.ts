@@ -5,7 +5,7 @@ import axios from "axios";
 import { QueryClient, useMutation, useQuery, useQueryClient, type Query } from "@tanstack/react-query";
 import { useAppAuth } from "./auth";
 import { API_BASE_URL } from "./config";
-import { isAbortError, type ApiError } from "./http";
+import { type ApiError } from "./http";
 import type { LocalProgressEntry } from "./storage";
 
 // ---- API のレスポンス型 ----
@@ -51,7 +51,7 @@ export type ServerProgress = {
   lesson: number;
   lesson_title?: string;
   scene_title?: string;
-  completed_at?: string;
+  completed_at?: string | null;
   score: number;
   time_spent: number;
 };
@@ -115,15 +115,10 @@ export async function fetchLesson(id: number, signal?: AbortSignal): Promise<Les
   return res.data;
 }
 
-// 進捗はログインしていない場合なども取得できないため、その場合は空の一覧として扱う
+// ログインしていない場合、API は空の一覧を返す（取得の失敗はエラーとして画面に伝える）
 export async function fetchMyProgress(signal?: AbortSignal): Promise<ServerProgress[]> {
-  try {
-    const res = await axios.get(url("/api/progress/my_progress/"), { signal });
-    return Array.isArray(res.data) ? res.data : [];
-  } catch (err) {
-    if (isAbortError(err)) throw err;
-    return [];
-  }
+  const res = await axios.get(url("/api/progress/my_progress/"), { signal });
+  return Array.isArray(res.data) ? res.data : [];
 }
 
 export type CompleteLessonInput = {
@@ -199,17 +194,38 @@ export function useCompleteLessonMutation() {
 
 // ---- 進捗の集計 ----
 
-// サーバ進捗とローカル進捗をレッスン単位でまとめる（スコアは高い方、時間は最新で上書き）
-export function mergeProgress(serverList: ServerProgress[], localList: LocalProgressEntry[]): ServerProgress[] {
-  const map = new Map<number, ServerProgress>();
-  for (const p of serverList) map.set(p.lesson, { ...p });
+// 画面に表示する学習進捗（1 レッスンにつき 1 件）
+export type ProgressItem = {
+  id?: number;
+  lesson: number;
+  lesson_title?: string;
+  scene_title?: string;
+  // 完了日時（記録が無い場合は null）
+  completed_at: string | null;
+  time_spent: number;
+  // アカウントへの保存待ち・未ログインでブラウザにのみ保存している記録
+  local: boolean;
+};
+
+// サーバ進捗とローカル進捗をレッスン単位でまとめる
+// サーバに記録があるレッスンはサーバの内容を表示し、ローカルの記録はサーバに無いレッスンのみ追加する
+export function mergeProgress(serverList: ServerProgress[], localList: LocalProgressEntry[]): ProgressItem[] {
+  const map = new Map<number, ProgressItem>();
+  for (const p of serverList) {
+    if (map.has(p.lesson)) continue;
+    map.set(p.lesson, {
+      id: p.id,
+      lesson: p.lesson,
+      lesson_title: p.lesson_title,
+      scene_title: p.scene_title,
+      completed_at: p.completed_at ?? null,
+      time_spent: p.time_spent,
+      local: false,
+    });
+  }
   for (const p of localList) {
-    const cur = map.get(p.lesson);
-    if (!cur) {
-      map.set(p.lesson, { ...p });
-    } else {
-      map.set(p.lesson, { ...cur, score: Math.max(cur.score, p.score), time_spent: p.time_spent });
-    }
+    if (map.has(p.lesson)) continue;
+    map.set(p.lesson, { lesson: p.lesson, completed_at: p.completed_at, time_spent: p.time_spent, local: true });
   }
   return Array.from(map.values());
 }

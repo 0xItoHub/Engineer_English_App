@@ -22,9 +22,8 @@ import {
   School as SchoolIcon
 } from "@mui/icons-material";
 import { getErrorMessage } from "./lib/http";
-import { readLocalProgress } from "./lib/storage";
-import { useAppAuth } from "./lib/auth";
-import { mergeProgress, useMyProgressQuery, useSceneQuery } from "./lib/queries";
+import { useSceneQuery } from "./lib/queries";
+import { useLearningProgress } from "./hooks/useLearningProgress";
 
 const PAGE_SIZE = 5;
 
@@ -32,13 +31,10 @@ const SceneDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const sceneQuery = useSceneQuery(id ? Number(id) : undefined);
-  const progressQuery = useMyProgressQuery();
-  const { isAuthenticated } = useAppAuth();
+  const { query: progressQuery, items: progress } = useLearningProgress();
   const [page, setPage] = useState<number>(1);
 
   const scene = sceneQuery.data ?? null;
-  // サーバからの進捗取得に失敗してもローカルだけで表示（ログイン中はアカウントの進捗を表示する）
-  const progress = mergeProgress(progressQuery.data ?? [], isAuthenticated ? [] : readLocalProgress());
   const loading = sceneQuery.isPending || progressQuery.isPending;
   // 表示できるデータが無いときだけエラーを表示する（キャッシュがあれば再取得の失敗時もそのまま表示）
   const error = sceneQuery.isError && !scene ? "Scene取得エラー: " + getErrorMessage(sceneQuery.error) : null;
@@ -56,9 +52,7 @@ const SceneDetail: React.FC = () => {
 
   const getLessonScore = (lessonId: number) => {
     const hit = progress.find((p) => p.lesson === lessonId);
-    if (!hit) return 0;
-    const s = typeof hit.score === "number" ? hit.score : 0;
-    return Math.max(0, Math.min(100, s));
+    return hit ? 100 : 0;
   };
 
   if (loading) {

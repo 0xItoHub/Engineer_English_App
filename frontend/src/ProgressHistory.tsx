@@ -24,22 +24,19 @@ import {
   TrendingUp as TrendingUpIcon,
   AccessTime as AccessTimeIcon
 } from "@mui/icons-material";
-import { readLocalProgress } from "./lib/storage";
-import { useAppAuth } from "./lib/auth";
-import { useMyProgressQuery, useScenesQuery, type Scene, type ServerProgress } from "./lib/queries";
+import { useScenesQuery, type ProgressItem, type Scene } from "./lib/queries";
+import { useLearningProgress } from "./hooks/useLearningProgress";
 
 type Progress = {
-  id?: number; // サーバのみ
-  lesson?: number; // ローカルのみで使用
+  id?: number;
+  lesson: number;
   lesson_title: string;
   scene_title: string;
-  completed_at: string;
-  score: number;
+  // 完了日時（記録が無い場合は null）
+  completed_at: string | null;
   time_spent: number;
+  local: boolean;
 };
-
-// ローカル保存分（壊れたデータは除外して読み込む）
-const readLocal = readLocalProgress;
 
 const buildLessonMap = (scenes: Scene[]): Map<number, { lesson_title: string; scene_title: string }> => {
   const map = new Map<number, { lesson_title: string; scene_title: string }>();
@@ -51,45 +48,32 @@ const buildLessonMap = (scenes: Scene[]): Map<number, { lesson_title: string; sc
   return map;
 };
 
-// サーバの進捗を表示用の形式にそろえる
-const toProgress = (p: ServerProgress): Progress => ({
-  id: p.id,
-  lesson: p.lesson,
-  lesson_title: p.lesson_title ?? `Lesson #${p.lesson}`,
-  scene_title: p.scene_title ?? "",
-  completed_at: p.completed_at ?? new Date().toISOString(),
-  score: p.score,
-  time_spent: p.time_spent,
-});
+// 表示用の形式にそろえる（タイトルが無い記録はシーン一覧から補完する）
+const toProgress = (p: ProgressItem, lessonMap: Map<number, { lesson_title: string; scene_title: string }>): Progress => {
+  const info = lessonMap.get(p.lesson);
+  return {
+    id: p.id,
+    lesson: p.lesson,
+    lesson_title: p.lesson_title || info?.lesson_title || `Lesson #${p.lesson}`,
+    scene_title: p.scene_title || info?.scene_title || (p.local ? "(未同期)" : ""),
+    completed_at: p.completed_at,
+    time_spent: p.time_spent,
+    local: p.local,
+  };
+};
 
 const ProgressHistory: React.FC = () => {
   const navigate = useNavigate();
-  const progressQuery = useMyProgressQuery();
-  const { isAuthenticated } = useAppAuth();
+  const { query: progressQuery, items } = useLearningProgress();
   // シーン一覧はホーム画面と共有し、ローカル進捗のタイトル補完に使う
   const scenesQuery = useScenesQuery();
   const loading = progressQuery.isPending || scenesQuery.isPending;
 
+  // サーバダウン時はシーン一覧が空となり、タイトルはフォールバック表示になる
   const progress = useMemo<Progress[]>(() => {
-    const server = (progressQuery.data ?? []).map(toProgress);
-    // サーバダウン時はシーン一覧が空となり、タイトルはフォールバック表示になる
     const lessonMap = buildLessonMap(scenesQuery.data ?? []);
-
-    // ローカル分をタイトル補完してProgress形式へ（ログイン中はアカウントに保存された進捗のみを表示する）
-    const localAsProgress: Progress[] = (isAuthenticated ? [] : readLocal()).map((x) => {
-      const info = lessonMap.get(x.lesson);
-      return {
-        lesson: x.lesson,
-        lesson_title: info?.lesson_title || `Lesson #${x.lesson}`,
-        scene_title: info?.scene_title || "(未同期)",
-        completed_at: new Date().toISOString(),
-        score: x.score,
-        time_spent: x.time_spent,
-      };
-    });
-
-    return [...server, ...localAsProgress];
-  }, [progressQuery.data, scenesQuery.data, isAuthenticated]);
+    return items.map((p) => toProgress(p, lessonMap));
+  }, [items, scenesQuery.data]);
 
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
@@ -100,7 +84,9 @@ const ProgressHistory: React.FC = () => {
     return `${secs}秒`;
   };
 
-  const formatDate = (dateString: string) => {
+  // 記録された完了日時を表示する（日時が無い記録は「—」）
+  const formatDate = (dateString: string | null) => {
+    if (!dateString || Number.isNaN(Date.parse(dateString))) return "—";
     return new Date(dateString).toLocaleDateString('ja-JP', {
       year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
     });
@@ -108,8 +94,7 @@ const ProgressHistory: React.FC = () => {
 
   const getTotalScore = () => {
     if (progress.length === 0) return 0;
-    const total = progress.reduce((sum, p) => sum + Math.min(p.score, 100), 0);
-    return Math.min(Math.round(total / progress.length), 100);
+    return 100;
   };
 
   const getTotalTime = () => progress.reduce((sum, p) => sum + p.time_spent, 0);
@@ -199,17 +184,17 @@ const ProgressHistory: React.FC = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {progress.map((item, idx) => (
-                    <TableRow key={item.id ?? `local-${idx}`}>
+                  {progress.map((item) => (
+                    <TableRow key={item.id ?? `local-${item.lesson}`}>
                       <TableCell><Typography variant="body1" sx={{ fontWeight: 'bold' }}>{item.lesson_title}</Typography></TableCell>
                       <TableCell><Chip label={item.scene_title} size="small" color="primary" /></TableCell>
                       <TableCell><Typography variant="body2" color="text.secondary">{formatDate(item.completed_at)}</Typography></TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography variant="body2">{Math.min(item.score, 100)}%</Typography>
+                          <Typography variant="body2">100%</Typography>
                           <LinearProgress
                             variant="determinate"
-                            value={Math.min(item.score, 100)}
+                            value={100}
                             aria-label={`${item.lesson_title} のスコア`}
                             sx={{ width: 60, height: 6, borderRadius: 3 }}
                           />

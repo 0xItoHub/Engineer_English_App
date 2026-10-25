@@ -1,15 +1,14 @@
 import React from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { onSessionExpired, useAppAuth } from "../lib/auth";
-import { markSyncStarted, syncLocalProgress } from "../lib/progressSync";
+import { clearSynced, runInitialSync } from "../lib/progressSync";
 import { isUserScopedQuery, postCompleteLesson, queryKeys } from "../lib/queries";
-import { readLocalProgress } from "../lib/storage";
 
 export type AuthNotice = { severity: "success" | "info" | "warning"; message: string };
 
 // ログイン状態の変化に合わせた処理（画面には何も描画しない）
-// - ログイン直後（タブごとに 1 回）に、ブラウザに保存された進捗をアカウントへ反映する
-// - ユーザーが切り替わった・ログアウトした場合は、前のユーザーのキャッシュを削除する
+// - ログイン直後（タブごとに 1 回）に、ブラウザに保存された進捗（未ログイン時の記録と本人の保存待ちの記録）をアカウントへ反映する
+// - ユーザーが切り替わった・ログアウトした場合は、前のユーザーのキャッシュを削除し、次回のログイン時に改めて反映する
 // - ログインの有効期限が切れた場合は、利用者へ通知する
 const AuthSessionEffects: React.FC<{ onNotice: (notice: AuthNotice) => void }> = ({ onNotice }) => {
   const auth = useAppAuth();
@@ -22,15 +21,17 @@ const AuthSessionEffects: React.FC<{ onNotice: (notice: AuthNotice) => void }> =
   React.useEffect(() => {
     if (previousSub.current && previousSub.current !== sub) {
       queryClient.removeQueries({ predicate: isUserScopedQuery });
+      clearSynced(previousSub.current);
     }
     previousSub.current = sub;
   }, [sub, queryClient]);
 
   React.useEffect(() => {
-    if (!sub || readLocalProgress().length === 0 || !markSyncStarted(sub)) return;
-    void syncLocalProgress((entry) =>
+    if (!sub) return;
+    void runInitialSync(sub, (entry) =>
       postCompleteLesson({ lessonId: String(entry.lesson), score: entry.score, timeSpent: entry.time_spent })
     ).then((result) => {
+      if (!result) return;
       void queryClient.invalidateQueries({ queryKey: queryKeys.myProgressAll });
       if (result.uploaded > 0) {
         const rest = result.remaining > 0 ? "残りは次回のログイン時に反映します。" : "";

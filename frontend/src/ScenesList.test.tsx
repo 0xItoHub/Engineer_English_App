@@ -1,9 +1,9 @@
 import { vi, type Mocked } from 'vitest';
-import { fireEvent, screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import axios from 'axios';
 import ScenesList from './ScenesList';
-import { LOCAL_PROGRESS_KEY } from './lib/storage';
+import { LOCAL_PROGRESS_KEY, pushLocalProgress } from './lib/storage';
 import { renderWithClient } from './test/renderWithClient';
 
 vi.mock('axios');
@@ -45,6 +45,28 @@ test('シーン一覧と進捗（サーバ＋ローカル）を表示する', as
   expect(screen.getByText('100% (2/2)')).toBeInTheDocument();
   expect(screen.getByText('2 フレーズ')).toBeInTheDocument();
   expect(screen.getByRole('progressbar', { name: 'Daily Standup の進捗' })).toHaveAttribute('aria-valuenow', '100');
+});
+
+test('他のユーザーがブラウザに保存した進捗は表示せず、保存した進捗はすぐに反映する', async () => {
+  mockedAxios.get.mockImplementation((url: string) => {
+    if (url.endsWith('/api/scenes/')) return Promise.resolve({ data: scenes });
+    if (url.endsWith('/api/progress/my_progress/')) return Promise.resolve({ data: [] });
+    return Promise.reject(new Error('unexpected'));
+  });
+  window.localStorage.setItem(
+    LOCAL_PROGRESS_KEY,
+    JSON.stringify([
+      { lesson: 10, score: 100, time_spent: 1, owner: 'user-b', completed_at: '2026-01-01T00:00:00.000Z' },
+      { lesson: 11, score: 100, time_spent: 1 },
+    ])
+  );
+
+  renderScenesList();
+
+  expect(await screen.findByText('50% (1/2)')).toBeInTheDocument();
+
+  act(() => pushLocalProgress({ lesson: 10, score: 100, time_spent: 2 }));
+  expect(screen.getByText('100% (2/2)')).toBeInTheDocument();
 });
 
 test('シーン一覧から集計した教材の数（シーン・レッスン・フレーズ・対話）を表示する', async () => {
