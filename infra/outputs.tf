@@ -15,4 +15,8 @@ output "cloudfront_domain_name" {
 output "cloudfront_distribution_id" {
   value       = try(aws_cloudfront_distribution.frontend[0].id, null)
   description = "CloudFrontを使う場合のみ出力"
-} 
+}
+output "dsql_endpoint" {
+  value       = local.dsql_endpoint
+  description = "Aurora DSQL のエンドポイント"
+}

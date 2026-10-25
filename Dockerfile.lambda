@@ -8,14 +8,15 @@ RUN pip install -r requirements.txt
 # ソースを配置
 COPY . .
 
-# まずは seed_db をイメージ内に生成
+# まずは seed_db をイメージ内に生成（DSQL_CLUSTER_ENDPOINT 未設定時に使う SQLite）
+# auth / contenttypes はマイグレーション履歴を持たないため --run-syncdb でテーブルを作成する
 ENV DJANGO_SETTINGS_MODULE=engineer_english.settings \
     SQLITE_PATH=/var/task/seed_db.sqlite3 \
     PYTHONUNBUFFERED=1
 
 # ビルド専用の一時的な SECRET_KEY（このRUN内でのみ有効。イメージには残らない）
 RUN export DJANGO_SECRET_KEY="build-only-$(python -c 'import secrets;print(secrets.token_urlsafe(32))')" \
- && python manage.py migrate --noinput \
+ && python manage.py migrate --noinput --run-syncdb \
  && (python manage.py collectstatic --noinput || true) \
  && python manage.py seed_six_scenes
 

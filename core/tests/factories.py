@@ -1,7 +1,6 @@
 """テスト用のデータ作成ヘルパー。"""
 
-from django.contrib.auth.models import User
-
+from core.auth import ExternalUser
 from core.models import Dialogue, Lesson, Phrase, Scene, UserProgress
 
 
@@ -33,12 +32,19 @@ def make_dialogue(scene=None, lesson=None, order=1, speaker="A"):
     )
 
 
-def make_user(username="alice", password="test-pass"):
-    return User.objects.create_user(username=username, password=password)
+def make_user(username="alice", sub=None):
+    """外部の認証基盤で認証されたユーザーを作成する（DB には保存しない）。"""
+    return ExternalUser(sub=sub or f"sub-{username}", username=username)
 
 
 def make_progress(user, lesson, score=50, time_spent=60):
-    return UserProgress.objects.create(user=user, lesson=lesson, score=score, time_spent=time_spent)
+    return UserProgress.objects.create(
+        user_sub=user.sub,
+        username=user.username,
+        lesson=lesson,
+        score=score,
+        time_spent=time_spent,
+    )
 
 
 def make_scene_with_content(title="Code Review", lessons=2):

@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -25,12 +26,12 @@ SECRET_KEY = _load_secret_key()
 DEBUG = os.getenv("DJANGO_DEBUG", "False") == "True"
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 
+# 学習コンテンツは seed コマンドで管理するため、管理画面・セッション・メッセージは使わない。
+# auth / contenttypes は DRF の未認証ユーザー（AnonymousUser）が参照するため残す。
+# `migrate --run-syncdb` は記載順にテーブルを作成するため、参照される contenttypes を先に置く。
 INSTALLED_APPS = [
-    "django.contrib.admin",
-    "django.contrib.auth",
     "django.contrib.contenttypes",
-    "django.contrib.sessions",
-    "django.contrib.messages",
+    "django.contrib.auth",
     "django.contrib.staticfiles",
     "rest_framework",
     "corsheaders",
@@ -40,11 +41,8 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
-    "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
@@ -59,8 +57,6 @@ TEMPLATES = [
             "context_processors": [
                 "django.template.context_processors.debug",
                 "django.template.context_processors.request",
-                "django.contrib.auth.context_processors.auth",
-                "django.contrib.messages.context_processors.messages",
             ]
         },
     }
@@ -70,15 +66,82 @@ WSGI_APPLICATION = "engineer_english.wsgi.application"
 ASGI_APPLICATION = "engineer_english.asgi.application"
 
 # SQLite パス: 環境変数 SQLITE_PATH があればそれを優先（Lambdaで /tmp/db.sqlite3 を指定）
-SQLITE_PATH = os.getenv("SQLITE_PATH")
 DEFAULT_SQLITE = BASE_DIR / "db.sqlite3"
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": SQLITE_PATH if SQLITE_PATH else DEFAULT_SQLITE,
+# Aurora DSQL のスキーマ名として受け付ける形式（search_path に埋め込むため英小文字・数字・_ のみ）
+_SCHEMA_NAME_RE = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")
+
+# OS のルート証明書バンドルの候補（Lambda の Amazon Linux / Debian 系 / macOS の順）。
+# psycopg の同梱ライブラリは OS の証明書ストアを自動では参照しないため、ファイルを明示する。
+CA_BUNDLE_CANDIDATES = (
+    "/etc/pki/tls/certs/ca-bundle.crt",
+    "/etc/ssl/certs/ca-certificates.crt",
+    "/etc/ssl/cert.pem",
+)
+
+
+def _find_ca_bundle(candidates=CA_BUNDLE_CANDIDATES):
+    """存在する最初の証明書バンドルのパスを返す（見つからなければ None）。"""
+    return next((path for path in candidates if os.path.isfile(path)), None)
+
+
+def build_databases(environ):
+    """環境変数から DATABASES 設定を組み立てる。
+
+    DSQL_CLUSTER_ENDPOINT が設定されていれば Aurora DSQL（本番）に、
+    未設定なら SQLite（ローカル開発・テスト・CI・イメージのビルド）に接続する。
+    """
+    endpoint = environ.get("DSQL_CLUSTER_ENDPOINT", "").strip()
+    if not endpoint:
+        return {
+            "default": {
+                "ENGINE": "django.db.backends.sqlite3",
+                "NAME": environ.get("SQLITE_PATH") or DEFAULT_SQLITE,
+            }
+        }
+
+    schema = environ.get("DSQL_SCHEMA", "").strip() or "app"
+    if not _SCHEMA_NAME_RE.match(schema):
+        from django.core.exceptions import ImproperlyConfigured
+
+        raise ImproperlyConfigured("DSQL_SCHEMA は英小文字・数字・_ で指定してください。")
+
+    region = (
+        environ.get("AWS_REGION") or environ.get("AWS_DEFAULT_REGION") or "ap-northeast-1"
+    ).strip()
+    options = {
+        # 接続のたびにアダプタが IAM 認証トークンを生成する（パスワードは保持しない）
+        "region": region,
+        # サーバ証明書とホスト名を検証する
+        "sslmode": environ.get("DSQL_SSLMODE", "").strip() or "verify-full",
+        # アプリのテーブルは専用スキーマに作成・参照する
+        "options": f"-c search_path={schema}",
     }
-}
+    sslrootcert = environ.get("DSQL_SSLROOTCERT", "").strip() or _find_ca_bundle()
+    if sslrootcert:
+        options["sslrootcert"] = sslrootcert
+
+    return {
+        "default": {
+            "ENGINE": "aurora_dsql_django",
+            "HOST": endpoint,
+            "PORT": "5432",
+            "NAME": "postgres",
+            "USER": environ.get("DSQL_DB_USER", "").strip() or "app",
+            "OPTIONS": options,
+            # 主キーは整数の連番を維持する（フロントエンドの URL は /scene/1 のような整数 ID）。
+            # 書き込み頻度が低いため、キャッシュ 1 で採番順に近い連続した値にする。
+            "USE_SEQUENCE_AUTOFIELDS": True,
+            "SEQUENCE_CACHE_SIZE": 1,
+        }
+    }
+
+
+DATABASES = build_databases(os.environ)
+
+# auth / contenttypes はマイグレーション履歴を使わず、最終的なモデル定義からテーブルを作成する
+# （`migrate --run-syncdb`）。Aurora DSQL が対応しない列型の変更を含む履歴を経由しないため。
+MIGRATION_MODULES = {"auth": None, "contenttypes": None}
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "Asia/Tokyo"
@@ -127,10 +190,9 @@ if not DEBUG:
 
 # Django REST Framework設定
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.SessionAuthentication",
-        "rest_framework.authentication.BasicAuthentication",
-    ],
+    # ログイン機能は外部の認証基盤（ID トークン）で提供する予定のため、既定の認証方式は持たない。
+    # 認証済みユーザーは core.auth.ExternalUser（外部ユーザー ID を持つ）として扱う。
+    "DEFAULT_AUTHENTICATION_CLASSES": [],
     # 既定は「読み取りは誰でも / 書き込みは認証ユーザーのみ」。
     # 未認証での書込・削除を防ぐ。GET主体のUIには影響しない。
     "DEFAULT_PERMISSION_CLASSES": [

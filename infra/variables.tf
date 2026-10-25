@@ -52,12 +52,12 @@ variable "startup_copy_seed_db" {
 
 variable "api_throttling_burst_limit" {
   type        = number
-  default     = 5000
-  description = "API Gateway のバースト上限（リクエスト数）"
+  default     = 50
+  description = "API Gateway のバースト上限（リクエスト数）。デモ用途に合わせ、処理量の上限を抑える"
 }
 
 variable "api_throttling_rate_limit" {
   type        = number
-  default     = 10000
+  default     = 20
   description = "API Gateway の定常上限（リクエスト/秒）"
 }

@@ -56,13 +56,12 @@ class SceneSerializer(serializers.ModelSerializer):
 class UserProgressSerializer(serializers.ModelSerializer):
     lesson_title = serializers.CharField(source="lesson.title", read_only=True)
     scene_title = serializers.CharField(source="lesson.scene.title", read_only=True)
-    username = serializers.CharField(source="user.username", read_only=True)
 
     class Meta:
         model = UserProgress
+        # 外部ユーザー ID（user_sub）は応答に含めない
         fields = [
             "id",
-            "user",
             "lesson",
             "lesson_title",
             "scene_title",
@@ -71,4 +70,4 @@ class UserProgressSerializer(serializers.ModelSerializer):
             "score",
             "time_spent",
         ]
-        read_only_fields = ["user", "completed_at"]
+        read_only_fields = ["username", "completed_at"]

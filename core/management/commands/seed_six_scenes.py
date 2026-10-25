@@ -326,6 +326,9 @@ class Command(BaseCommand):
         "5 dialogues (phrases/dialogues attached to lessons)."
     )
 
+    # 全シーン分（約 100 行）を 1 トランザクションで投入する。
+    # Aurora DSQL の 1 トランザクションあたりの変更行数の上限（3,000 行）に十分収まる。
+    # ID は採番に任せ、既存行はタイトル・本文で照合するため、何度実行しても同じ内容・ID になる。
     @transaction.atomic
     def handle(self, *args, **options):
         created_counts = {"lesson": 0, "phrase": 0, "dialogue": 0}
@@ -335,8 +338,11 @@ class Command(BaseCommand):
             data = SCENE_DATA[scene_title]
             scene, _ = Scene.objects.get_or_create(title=scene_title)
 
-            # 既存seed由来データのクリーンアップ（安全に）
-            Phrase.objects.filter(scene=scene, note="seed").delete()
+            # 現在の seed に含まれないフレーズ・対話（以前の seed 由来）を整理する
+            current_phrases = [en for en, _ in data["phrases"]]
+            Phrase.objects.filter(scene=scene, note="seed").exclude(
+                text_en__in=current_phrases
+            ).delete()
             Dialogue.objects.filter(scene=scene, line_en__in=OLD_GENERIC_DIALOGUE_EN).delete()
 
             # レッスン5件（タイトルはシーン固有）

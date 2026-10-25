@@ -49,10 +49,26 @@ def test_user_progress_serializer_exposes_titles(user, lesson):
     assert data["score"] == 80
 
 
-def test_user_progress_serializer_ignores_read_only_user(lesson):
+def test_user_progress_serializer_fields(user, lesson):
+    data = UserProgressSerializer(make_progress(user, lesson)).data
+
+    # 外部ユーザー ID は応答に含めない
+    assert set(data) == {
+        "id",
+        "lesson",
+        "lesson_title",
+        "scene_title",
+        "username",
+        "completed_at",
+        "score",
+        "time_spent",
+    }
+
+
+def test_user_progress_serializer_ignores_read_only_fields(lesson):
     serializer = UserProgressSerializer(
-        data={"lesson": lesson.id, "user": 999, "score": 10, "time_spent": 5}
+        data={"lesson": lesson.id, "username": "mallory", "score": 10, "time_spent": 5}
     )
 
     assert serializer.is_valid(), serializer.errors
-    assert "user" not in serializer.validated_data
+    assert "username" not in serializer.validated_data

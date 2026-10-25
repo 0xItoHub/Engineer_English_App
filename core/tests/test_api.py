@@ -1,7 +1,13 @@
-import pytest
-from django.db import connection
-from django.test.utils import CaptureQueriesContext
+from unittest import mock
 
+import pytest
+from django.db import OperationalError, connection
+from django.test.utils import CaptureQueriesContext
+from rest_framework.test import APIClient
+
+from core import db as core_db
+from core import views
+from core.db import RetryExhausted
 from core.models import UserProgress
 from core.throttles import CompleteLessonRateThrottle
 
@@ -191,7 +197,7 @@ def test_complete_lesson_authenticated_creates_progress(auth_client, user, lesso
     )
 
     assert res.status_code == 200
-    progress = UserProgress.objects.get(user=user, lesson=lesson)
+    progress = UserProgress.objects.get(user_sub=user.sub, lesson=lesson)
     assert (progress.score, progress.time_spent) == (80, 120)
     assert res.json()["lesson_title"] == lesson.title
 
@@ -200,7 +206,7 @@ def test_complete_lesson_authenticated_updates_progress(auth_client, user, lesso
     make_progress(user, lesson, score=90, time_spent=10)
 
     auth_client.post(COMPLETE_URL, {"lesson_id": lesson.id, "score": 50, "time_spent": 200})
-    progress = UserProgress.objects.get(user=user, lesson=lesson)
+    progress = UserProgress.objects.get(user_sub=user.sub, lesson=lesson)
     # 最高スコアを保持し、学習時間は最新の値に更新する
     assert (progress.score, progress.time_spent) == (90, 200)
 
@@ -222,8 +228,62 @@ def test_complete_lesson_clamps_values(auth_client, user, lesson, score, time_sp
     )
 
     assert res.status_code == 200
-    progress = UserProgress.objects.get(user=user, lesson=lesson)
+    progress = UserProgress.objects.get(user_sub=user.sub, lesson=lesson)
     assert (progress.score, progress.time_spent) == expected
+
+
+def test_complete_lesson_records_username_and_hides_sub(auth_client, user, lesson):
+    res = auth_client.post(COMPLETE_URL, {"lesson_id": lesson.id, "score": 70}, format="json")
+
+    body = res.json()
+    assert body["username"] == "alice"
+    assert body["lesson"] == lesson.id
+    assert "user_sub" not in body
+    assert UserProgress.objects.get().user_sub == "sub-alice"
+
+
+def test_complete_lesson_keys_progress_by_sub(user, lesson):
+    # 同じユーザー名でも外部ユーザー ID が異なれば別の記録として扱う
+    other = make_user("alice", sub="sub-other")
+    make_progress(other, lesson, score=10)
+    client = APIClient()
+    client.force_authenticate(user=user)
+
+    client.post(COMPLETE_URL, {"lesson_id": lesson.id, "score": 90}, format="json")
+
+    assert UserProgress.objects.count() == 2
+    assert UserProgress.objects.get(user_sub="sub-other").score == 10
+    assert UserProgress.objects.get(user_sub="sub-alice").score == 90
+
+
+def test_complete_lesson_retries_on_conflict(auth_client, user, lesson):
+    real = views._record_progress
+    calls = []
+
+    def flaky(*args):
+        calls.append(1)
+        if len(calls) == 1:
+            error = OperationalError("conflict")
+            error.__cause__ = type("Conflict", (Exception,), {"sqlstate": "OC000"})()
+            raise error
+        return real(*args)
+
+    with mock.patch.object(views, "_record_progress", side_effect=flaky):
+        with mock.patch.object(core_db.time, "sleep"):
+            res = auth_client.post(COMPLETE_URL, {"lesson_id": lesson.id, "score": 60})
+
+    assert res.status_code == 200
+    assert len(calls) == 2
+    assert UserProgress.objects.get().score == 60
+
+
+def test_complete_lesson_returns_503_when_conflicts_persist(auth_client, lesson):
+    with mock.patch.object(views, "run_in_transaction_with_retry", side_effect=RetryExhausted):
+        res = auth_client.post(COMPLETE_URL, {"lesson_id": lesson.id, "score": 60})
+
+    assert res.status_code == 503
+    assert "error" in res.json()
+    assert UserProgress.objects.count() == 0
 
 
 @pytest.mark.parametrize(
@@ -297,6 +357,7 @@ def test_my_progress_returns_only_own_records(auth_client, user, lesson):
 def test_unknown_url_returns_404(client, db):
     assert client.get("/no-such-page/").status_code == 404
     assert client.get("/api/no-such-resource/").status_code == 404
+    assert client.get("/admin/").status_code == 404
 
 
 def test_home_redirects_to_frontend(client, monkeypatch):
