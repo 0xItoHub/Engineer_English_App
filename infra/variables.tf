@@ -83,8 +83,8 @@ variable "csp_enforce" {
 # データベースロールの分離（infra/README.md の「データベースロールの分離」参照）
 variable "web_db_user" {
   type        = string
-  default     = "app_rw"
-  description = "Web 用の Lambda が接続するデータベースロール。既定は DML のみの実行時ロール app_rw。ロール分離への移行中は app を指定する（infra/README.md 参照）"
+  default     = "app"
+  description = "Web 用の Lambda が接続するデータベースロール。実行時ロール app_rw の作成と権限付与の後に app_rw を指定する（infra/README.md 参照）"
 
   validation {
     condition     = can(regex("^[a-z_][a-z0-9_]{0,62}$", var.web_db_user)) && var.web_db_user != "admin"

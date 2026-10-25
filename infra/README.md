@@ -487,11 +487,7 @@ terraform -chdir=infra output -raw migrator_role_arn      # <migrator_role_arn>
 
 **手順 1. 管理専用の Lambda を作成する（Web 用は `app` のまま）**
 
-`terraform.tfvars` に次の 1 行を追加して `apply` します。Web 用の Lambda は引き続き `app` で接続します。
-
-```hcl
-web_db_user = "app"   # 手順 4 で削除する
-```
+`terraform.tfvars` は変更せずに `apply` します（`web_db_user` は既定値 `app` のまま。手順 4 で `app_rw` を指定します）。Web 用の Lambda は引き続き `app` で接続します。
 
 ```bash
 cd infra
@@ -542,7 +538,7 @@ SELECT has_schema_privilege('app_rw', 'app', 'USAGE')  AS usage,
 
 **手順 4. Web 用の Lambda を `app_rw` に切り替える**
 
-`terraform.tfvars` から `web_db_user = "app"` を削除し（既定値 `app_rw`）、`apply` します。
+`terraform.tfvars` に `web_db_user = "app_rw"` を追加し、`apply` します。
 
 ```bash
 terraform plan    # Web 用の Lambda の DSQL_DB_USER が app → app_rw に変わるだけであることを確認
@@ -576,7 +572,7 @@ SELECT pg_role_name, arn FROM sys.iam_pg_role_mappings ORDER BY pg_role_name;
 
 | 状況 | 手順 |
 | --- | --- |
-| 手順 4 の後に問題が見つかった（手順 6 の前） | `terraform.tfvars` に `web_db_user = "app"` を戻して `apply`。Web 用の Lambda は `app` で接続する |
+| 手順 4 の後に問題が見つかった（手順 6 の前） | `terraform.tfvars` の `web_db_user` を `app` に戻して（または行を削除して）`apply`。Web 用の Lambda は `app` で接続する |
 | 手順 6 の後に問題が見つかった | `admin` で `AWS IAM GRANT app TO '<lambda_exec_role_arn>';` を実行してから、上と同じく `web_db_user = "app"` で `apply` |
 | 権限の付与漏れ（新しいテーブルで `permission denied`） | 管理専用の Lambda で `{"manage":"grant_runtime"}` を実行 |
 
