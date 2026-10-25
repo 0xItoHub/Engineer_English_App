@@ -127,3 +127,9 @@ def test_disallowed_host_returns_json_400(client):
 
     assert res.status_code == 400
     assert res.json() == {"detail": "リクエストを処理できませんでした。"}
+
+
+def test_json_error_outputs_japanese_as_is(client):
+    res = client.get("/api/unknown/")
+
+    assert "お探しのページ".encode() in res.content

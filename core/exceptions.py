@@ -78,21 +78,28 @@ def api_exception_handler(exc, context):
     return Response({"detail": SERVER_ERROR_DETAIL}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+def json_error(detail, status_code):
+    """`{"detail": ...}` 形式のエラー応答（DRF の応答と同じく日本語をそのまま出力する）。"""
+    return JsonResponse(
+        {"detail": detail}, status=status_code, json_dumps_params={"ensure_ascii": False}
+    )
+
+
 # --- DRF を通らないパスのエラー応答（engineer_english/urls.py の handler404 など） ----------
 
 
 def bad_request(request, exception):
-    return JsonResponse({"detail": BAD_REQUEST_DETAIL}, status=400)
+    return json_error(BAD_REQUEST_DETAIL, 400)
 
 
 def permission_denied(request, exception):
-    return JsonResponse({"detail": PERMISSION_DENIED_DETAIL}, status=403)
+    return json_error(PERMISSION_DENIED_DETAIL, 403)
 
 
 def page_not_found(request, exception):
-    return JsonResponse({"detail": NOT_FOUND_DETAIL}, status=404)
+    return json_error(NOT_FOUND_DETAIL, 404)
 
 
 def server_error(request):
     # 例外の内容は Django のログ（django.request）に記録される
-    return JsonResponse({"detail": SERVER_ERROR_DETAIL}, status=500)
+    return json_error(SERVER_ERROR_DETAIL, 500)

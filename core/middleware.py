@@ -18,8 +18,9 @@ import hmac
 import ipaddress
 
 from django.conf import settings
-from django.http import JsonResponse
 from django.utils.deprecation import MiddlewareMixin
+
+from .exceptions import json_error
 
 ORIGIN_VERIFY_META = "HTTP_X_ORIGIN_VERIFY"
 VIEWER_IP_META = "HTTP_X_VIEWER_IP"
@@ -56,7 +57,7 @@ class OriginVerifyMiddleware(MiddlewareMixin):
 
         meta = request.META
         if not _matches(meta.get(ORIGIN_VERIFY_META, ""), secret):
-            return JsonResponse({"detail": FORBIDDEN_DETAIL}, status=403)
+            return json_error(FORBIDDEN_DETAIL, 403)
 
         viewer_ip = parse_ip(meta.get(VIEWER_IP_META))
         if viewer_ip is not None:
