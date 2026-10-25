@@ -24,6 +24,9 @@ resource "aws_lambda_function" "backend" {
       DJANGO_FRONTEND_URL = local.frontend_url
       # SECRET_KEY の値は SSM Parameter Store に置き、ここではパラメータ名のみ渡す
       DJANGO_SECRET_KEY_SSM_PARAM = var.secret_key_ssm_param_name
+      # Cognito のアクセストークン検証に使う値（いずれも公開情報）
+      COGNITO_USER_POOL_ID  = aws_cognito_user_pool.main.id
+      COGNITO_APP_CLIENT_ID = aws_cognito_user_pool_client.spa.id
       # Aurora DSQL のエンドポイント（接続はアプリ用ロールで IAM 認証）
       DSQL_CLUSTER_ENDPOINT = local.dsql_endpoint
       SQLITE_PATH           = var.sqlite_path

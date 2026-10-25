@@ -61,3 +61,9 @@ variable "api_throttling_rate_limit" {
   default     = 20
   description = "API Gateway の定常上限（リクエスト/秒）"
 }
+
+variable "enable_local_callbacks" {
+  type        = bool
+  default     = false
+  description = "Cognito のアプリクライアントにローカル開発用（http://localhost:3000）の URL を登録する"
+}

@@ -190,9 +190,11 @@ if not DEBUG:
 
 # Django REST Framework設定
 REST_FRAMEWORK = {
-    # ログイン機能は外部の認証基盤（ID トークン）で提供する予定のため、既定の認証方式は持たない。
-    # 認証済みユーザーは core.auth.ExternalUser（外部ユーザー ID を持つ）として扱う。
-    "DEFAULT_AUTHENTICATION_CLASSES": [],
+    # ログインは Amazon Cognito で行い、API は Bearer のアクセストークンで認証する。
+    # 認証済みユーザーは core.auth.ExternalUser（Cognito のユーザー ID を持つ）として扱う。
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "core.authentication.CognitoAccessTokenAuthentication",
+    ],
     # 既定は「読み取りは誰でも / 書き込みは認証ユーザーのみ」。
     # 未認証での書込・削除を防ぐ。GET主体のUIには影響しない。
     "DEFAULT_PERMISSION_CLASSES": [

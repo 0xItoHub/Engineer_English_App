@@ -218,3 +218,23 @@ GRANT USAGE, CREATE ON SCHEMA app TO app;
 | `DSQL_CLUSTER_ENDPOINT` | （Terraform が設定） | 設定されていると Aurora DSQL に接続する |
 | `DSQL_DB_USER` | `app` | 接続するデータベースロール |
 | `DSQL_SCHEMA` | `app` | テーブルを作成・参照するスキーマ（`search_path`） |
+
+## 7. Amazon Cognito（ログイン）
+
+`infra/cognito.tf` でユーザープール（Essentials プラン、月間アクティブユーザー 10,000 人まで無料）、マネージドログインのドメイン、SPA 用アプリクライアント（クライアントシークレットなし・認可コード + PKCE）を作成します。
+
+フロントエンドのビルド時には次の出力値を環境変数として渡します（いずれも公開情報）。
+
+| Terraform の出力 | フロントエンドの環境変数 |
+|---|---|
+| `cognito_authority` | `VITE_COGNITO_AUTHORITY` |
+| `cognito_client_id` | `VITE_COGNITO_CLIENT_ID` |
+| `cognito_domain` | `VITE_COGNITO_DOMAIN` |
+
+```bash
+terraform -chdir=infra output -raw cognito_authority
+```
+
+ローカル開発でログインを試す場合は、`terraform.tfvars` で `enable_local_callbacks = true` を指定して `http://localhost:3000` の URL を登録します（既定では登録しません）。
+
+バックエンド（Lambda）には `COGNITO_USER_POOL_ID` と `COGNITO_APP_CLIENT_ID` が Terraform から設定され、API はアクセストークンを検証します。

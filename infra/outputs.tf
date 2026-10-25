@@ -20,3 +20,16 @@ output "dsql_endpoint" {
   value       = local.dsql_endpoint
   description = "Aurora DSQL のエンドポイント"
 }
+
+# フロントエンドのビルド時に使う値（VITE_COGNITO_*）
+output "cognito_authority" {
+  value = "https://cognito-idp.${var.aws_region}.amazonaws.com/${aws_cognito_user_pool.main.id}"
+}
+
+output "cognito_client_id" {
+  value = aws_cognito_user_pool_client.spa.id
+}
+
+output "cognito_domain" {
+  value = "https://${aws_cognito_user_pool_domain.main.domain}.auth.${var.aws_region}.amazoncognito.com"
+}
