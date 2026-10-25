@@ -32,6 +32,9 @@ export function readCognitoConfig(env: CognitoEnv = import.meta.env): CognitoCon
 export const cognitoConfig = readCognitoConfig();
 export const isAuthEnabled = cognitoConfig !== null;
 
+// マネージドログイン（Cognito のログイン画面）の表示言語（lang パラメータ。ja = 日本語）
+export const LOGIN_PAGE_LANGUAGE = "ja";
+
 // UserManager の設定（リダイレクト先は配信中のオリジンから組み立てる）
 export function createUserManager(config: CognitoConfig, origin: string = window.location.origin): UserManager {
   return new UserManager({
@@ -41,6 +44,8 @@ export function createUserManager(config: CognitoConfig, origin: string = window
     post_logout_redirect_uri: `${origin}/`,
     response_type: "code",
     scope: "openid email profile",
+    // ログイン画面（/oauth2/authorize）を日本語で表示する
+    extraQueryParams: { lang: LOGIN_PAGE_LANGUAGE },
     // アクセストークンの期限が近づいたら、リフレッシュトークンで自動的に更新する
     automaticSilentRenew: true,
     // トークンとログイン途中の状態は、どちらもタブ単位の sessionStorage に保存する
