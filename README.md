@@ -72,18 +72,23 @@ terraform apply
 
 4) **データベースの初期化（初回とモデル変更時）**
 
-本番のデータは Aurora DSQL に保存します。Lambda を直接呼び出して、テーブル作成と学習データの投入を行います（初回のみ、事前に [infra/README.md](infra/README.md) の「Aurora DSQL の初期設定」を実施）。
+本番のデータは Aurora DSQL に保存します。管理専用の Lambda（`<project_name>-migrator`）を直接呼び出して、テーブル作成と学習データの投入を行います（初回のみ、事前に [infra/README.md](infra/README.md) の「Aurora DSQL の初期設定」を実施）。
 ```bash
-FUNCTION=<lambda_function_name>
-aws lambda invoke --function-name "$FUNCTION" --cli-binary-format raw-in-base64-out \
-  --payload '{"manage":"migrate"}' /dev/stdout
-aws lambda invoke --function-name "$FUNCTION" --cli-binary-format raw-in-base64-out \
+MIGRATOR=$(terraform -chdir=infra output -raw migrator_function_name)
+aws lambda invoke --function-name "$MIGRATOR" --cli-binary-format raw-in-base64-out \
+  --payload '{"manage":"migrate"}' /dev/stdout   # テーブル作成 + 実行時ロールへの権限付与
+aws lambda invoke --function-name "$MIGRATOR" --cli-binary-format raw-in-base64-out \
   --payload '{"manage":"seed"}' /dev/stdout
-aws lambda invoke --function-name "$FUNCTION" --cli-binary-format raw-in-base64-out \
-  --payload '{"manage":"check"}' /dev/stdout   # 件数の確認
+aws lambda invoke --function-name "$MIGRATOR" --cli-binary-format raw-in-base64-out \
+  --payload '{"manage":"check"}' /dev/stdout     # 件数の確認
 ```
 
-- 実行できる操作は `migrate` / `seed` / `check` の 3 つだけです（それ以外は `"status": "rejected"` を返します）。
+| 関数 | 接続するデータベースロール | 実行できる操作 |
+|---|---|---|
+| `<project_name>-migrator`（管理専用、`MANAGE_ONLY=1`） | `app`（テーブルの所有者。DDL を実行できる） | `migrate` / `seed` / `check` / `grant_runtime` |
+| `<project_name>-api`（Web リクエストを処理） | `app_rw`（DML のみ） | `check` |
+
+- 許可リストにない操作は `"status": "rejected"` を返します。管理専用の関数は HTTP のリクエストを処理しません。
 - `{"manage": ...}` 形式のイベントは `lambda:InvokeFunction` 権限を持つ IAM プリンシパルからの直接呼び出しでのみ届きます（API Gateway 経由のリクエストはこの形式になりません）。
 - `seed` は何度実行しても同じ内容・同じ ID になります。
 

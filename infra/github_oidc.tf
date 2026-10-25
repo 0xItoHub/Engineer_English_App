@@ -88,7 +88,8 @@ resource "aws_iam_role_policy" "github_deploy" {
             "lambda:GetFunctionConfiguration",
             "lambda:UpdateFunctionCode",
           ],
-          Resource = aws_lambda_function.backend.arn
+          # Web 用の関数と管理専用の関数（同じイメージ）
+          Resource = [aws_lambda_function.backend.arn, aws_lambda_function.migrator.arn]
         },
       ],
       # フロントエンド（S3 + CloudFront）を使う構成のときのみ付与
