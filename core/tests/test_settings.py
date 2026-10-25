@@ -110,3 +110,11 @@ def test_production_renders_json_only(settings):
     assert settings.REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] == [
         "rest_framework.renderers.JSONRenderer"
     ]
+
+
+def test_origin_verify_middleware_runs_first(settings):
+    assert settings.MIDDLEWARE[0] == "core.middleware.OriginVerifyMiddleware"
+
+
+def test_origin_verify_secret_is_unset_in_tests(settings):
+    assert settings.ORIGIN_VERIFY_SECRET == ""

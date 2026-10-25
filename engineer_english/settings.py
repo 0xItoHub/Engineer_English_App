@@ -38,7 +38,13 @@ INSTALLED_APPS = [
     "core",
 ]
 
+# CloudFront 経由のリクエストの確認（X-Origin-Verify）と閲覧者の IP アドレスの設定（X-Viewer-IP）。
+# 値は Terraform が生成し、Lambda の環境変数で渡す。未設定（ローカル開発・テスト）なら確認しない。
+ORIGIN_VERIFY_SECRET = os.getenv("ORIGIN_VERIFY_SECRET", "").strip()
+
 MIDDLEWARE = [
+    # 他のミドルウェアより先に、経路の確認と転送用ヘッダーの整理を行う
+    "core.middleware.OriginVerifyMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -216,6 +222,8 @@ REST_FRAMEWORK = {
     # API のレート制限（環境変数で上書き可能）。
     # カウンタは既定の LocMem キャッシュに保持するため、Lambda ではインスタンス単位の制限となる。
     # 全体の上限は API Gateway 側のスロットリングで担保する。
+    # 未認証のリクエストは REMOTE_ADDR で識別する。core.middleware が CloudFront の
+    # 閲覧者の IP アドレスを設定し、X-Forwarded-For は取り除くため、NUM_PROXIES は指定しない。
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
