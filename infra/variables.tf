@@ -62,6 +62,12 @@ variable "api_throttling_rate_limit" {
   description = "API Gateway の定常上限（リクエスト/秒）"
 }
 
+variable "origin_verify_enforced" {
+  type        = bool
+  default     = true
+  description = "Lambda に ORIGIN_VERIFY_SECRET を渡し、CloudFront を経由しない API へのアクセスを 403 にする。秘密の値の更新時は一時的に false にする（infra/README.md 参照）"
+}
+
 variable "enable_local_callbacks" {
   type        = bool
   default     = false

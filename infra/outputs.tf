@@ -1,5 +1,11 @@
 output "api_invoke_url" {
-  value = aws_apigatewayv2_api.http_api.api_endpoint
+  value       = aws_apigatewayv2_api.http_api.api_endpoint
+  description = "API Gateway の URL（CloudFront を使う構成では、直接のアクセスは 403 となる）"
+}
+
+output "public_base_url" {
+  value       = try("https://${aws_cloudfront_distribution.frontend[0].domain_name}", aws_apigatewayv2_api.http_api.api_endpoint)
+  description = "API・フロントエンドを公開する URL（CloudFront を使う場合はその URL）。リポジトリ変数 API_BASE_URL に設定する"
 }
 
 output "frontend_website_url" {

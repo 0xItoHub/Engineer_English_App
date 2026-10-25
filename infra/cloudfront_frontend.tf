@@ -26,6 +26,33 @@ resource "aws_cloudfront_function" "spa_rewrite" {
   EOT
 }
 
+# /api/* の閲覧者リクエスト: 閲覧者の IP アドレスを X-Viewer-IP に設定する。
+# 閲覧者が送った X-Viewer-IP / X-Origin-Verify は取り除き、CloudFront が設定した値のみを API に渡す
+# （X-Origin-Verify はこの後、オリジンのカスタムヘッダーとして CloudFront が付与する）。
+resource "aws_cloudfront_function" "api_viewer_ip" {
+  count   = local.use_frontend ? 1 : 0
+  name    = "${var.project_name}-api-viewer-ip"
+  runtime = "cloudfront-js-2.0"
+  comment = "Set X-Viewer-IP for API requests"
+  publish = true
+  code    = <<-EOT
+    function handler(event) {
+      var request = event.request;
+      delete request.headers["x-origin-verify"];
+      request.headers["x-viewer-ip"] = { value: event.viewer.ip };
+      return request;
+    }
+  EOT
+}
+
+# CloudFront から API Gateway への転送であることを確認するための秘密の値。
+# 値は state にのみ保存され、plan / apply の出力には表示されない（sensitive）。
+resource "random_password" "origin_verify" {
+  count   = local.use_frontend ? 1 : 0
+  length  = 48
+  special = false
+}
+
 # API はキャッシュせず、Host ヘッダー以外のリクエスト情報をそのまま転送する
 data "aws_cloudfront_cache_policy" "caching_disabled" {
   name = "Managed-CachingDisabled"
@@ -55,6 +82,12 @@ resource "aws_cloudfront_distribution" "frontend" {
     domain_name = local.api_host
     origin_id   = "api-gateway"
 
+    # API（Django の core.middleware）は、この値が一致するリクエストのみを処理する
+    custom_header {
+      name  = "X-Origin-Verify"
+      value = random_password.origin_verify[0].result
+    }
+
     custom_origin_config {
       http_port              = 80
       https_port             = 443
@@ -72,6 +105,11 @@ resource "aws_cloudfront_distribution" "frontend" {
     cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
     origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
     compress                 = true
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.api_viewer_ip[0].arn
+    }
   }
 
   default_cache_behavior {
