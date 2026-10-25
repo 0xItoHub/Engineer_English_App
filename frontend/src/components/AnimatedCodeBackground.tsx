@@ -17,6 +17,9 @@ const CODE_LINES = [
 
 function pick<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
 
+// 描画に使う画面の倍率の上限
+const MAX_DPR = 2;
+
 const AnimatedCodeBackground: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   // 「視差効果を減らす」設定時はアニメーションせず静止画として描画する
@@ -35,12 +38,35 @@ const AnimatedCodeBackground: React.FC = () => {
     const c = ctx;
 
     let raf = 0;
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    // 高解像度の画面でも描画の負荷が大きくなりすぎないよう、倍率は 2 倍までにする
+    const devicePixelRatio = () => Math.min(MAX_DPR, Math.max(1, window.devicePixelRatio || 1));
 
     // state
     const lineHeight = 20; // px
-    const maxLines = Math.ceil(window.innerHeight / lineHeight) + 5;
-    let buffer: string[] = [];
+    const linesFor = (height: number) => Math.ceil(height / lineHeight) + 5;
+    // 表示中の行（新しい行から順に参照するリングバッファ。フレームごとに配列を作り直さない）
+    let capacity = linesFor(window.innerHeight);
+    let ring: string[] = new Array<string>(capacity).fill("");
+    let head = 0; // 最新の行の位置
+    let count = 0; // 保持している行数
+    const lineAt = (i: number) => ring[(head - i + capacity) % capacity];
+    const pushLine = (line: string) => {
+      head = (head + 1) % capacity;
+      ring[head] = line;
+      if (count < capacity) count += 1;
+    };
+    // 画面の高さが変わった場合は、新しい行から順に保持できる分だけ引き継ぐ
+    const resizeRing = (next: number) => {
+      if (next === capacity) return;
+      const kept = Math.min(count, next);
+      const nextRing = new Array<string>(next).fill("");
+      for (let i = 0; i < kept; i++) nextRing[kept - 1 - i] = lineAt(i);
+      ring = nextRing;
+      capacity = next;
+      count = kept;
+      head = kept > 0 ? kept - 1 : 0;
+    };
+
     let current = pick(CODE_LINES);
     let cursor = 0;
     let lastTime = 0;
@@ -61,10 +87,10 @@ const AnimatedCodeBackground: React.FC = () => {
       c.fillStyle = "#58a6ff";
       c.font = fontStack;
 
-      for (let i = 0; i < buffer.length; i++) {
+      for (let i = 0; i < count; i++) {
         const y = window.innerHeight - i * lineHeight - 40;
         if (y < -20) break;
-        c.fillText(buffer[i], 24, y);
+        c.fillText(lineAt(i), 24, y);
       }
 
       // カーソル
@@ -78,15 +104,19 @@ const AnimatedCodeBackground: React.FC = () => {
 
     // 静止画用：画面を埋める分のコード片を一度だけ描画
     const drawStatic = () => {
-      buffer = Array.from({ length: maxLines }, (_, i) => CODE_LINES[i % CODE_LINES.length]);
-      draw(buffer[0], true);
+      count = 0;
+      for (let i = capacity - 1; i >= 0; i--) pushLine(CODE_LINES[i % CODE_LINES.length]);
+      draw(lineAt(0), true);
     };
 
     const resize = () => {
+      const dpr = devicePixelRatio();
       canvas.width = Math.floor(window.innerWidth * dpr);
       canvas.height = Math.floor(window.innerHeight * dpr);
       // リサイズのたびに倍率を設定し直す（scale の累積を防ぐ）
       c.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // 画面の高さに合わせて表示する行数を決め直す
+      resizeRing(linesFor(window.innerHeight));
       if (reducedMotion) drawStatic();
     };
     resize();
@@ -108,7 +138,7 @@ const AnimatedCodeBackground: React.FC = () => {
       const speed = 1 + Math.floor(Math.random() * 2); // 1〜2文字
       cursor = Math.min(current.length, cursor + speed);
       const typing = current.slice(0, cursor);
-      buffer = [typing, ...buffer].slice(0, maxLines);
+      pushLine(typing);
       if (cursor >= current.length) {
         cursor = 0;
         current = pick(CODE_LINES);
@@ -118,10 +148,27 @@ const AnimatedCodeBackground: React.FC = () => {
       draw(typing, Math.floor(t / 600) % 2 === 0);
     };
 
-    raf = requestAnimationFrame(step);
+    const start = () => {
+      if (raf) return;
+      lastTime = 0;
+      raf = requestAnimationFrame(step);
+    };
+    const stop = () => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0;
+    };
+    // タブが非表示の間はアニメーションを止め、表示に戻ったら再開する
+    const onVisibilityChange = () => {
+      if (document.hidden) stop();
+      else start();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    if (!document.hidden) start();
+
     return () => {
-      cancelAnimationFrame(raf);
+      stop();
       window.removeEventListener("resize", resize);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [reducedMotion]);
 
