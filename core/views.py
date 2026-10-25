@@ -12,6 +12,7 @@ from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from .db import RetryExhausted, run_in_transaction_with_retry
 from .models import Dialogue, Lesson, Phrase, Scene, UserProgress
 from .serializers import (
+    CompleteLessonSerializer,
     DialogueSerializer,
     LessonDetailSerializer,
     LessonSerializer,
@@ -25,7 +26,7 @@ from .throttles import CompleteLessonRateThrottle
 MAX_POSITIVE_INT = 2_147_483_647
 
 # 競合が続いて記録できなかった場合のメッセージ
-BUSY_DETAIL ="混み合っているため記録できませんでした。時間をおいて再度お試しください"
+BUSY_DETAIL = "混み合っているため記録できませんでした。時間をおいて再度お試しください"
 
 
 def _int_query_param(request, name):
@@ -133,28 +134,13 @@ class UserProgressViewSet(
     )
     def complete_lesson(self, request):
         # 入力の検証・型変換（不正値は 500 ではなく 400 を返す）
-        if not isinstance(request.data, dict):
-            return Response(
-                {"detail": "リクエスト本文はオブジェクト形式で指定してください"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        try:
-            lesson_id = int(request.data.get("lesson_id"))
-        except (TypeError, ValueError):
-            return Response(
-                {"detail": "lesson_id は整数で指定してください"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        try:
-            score = int(request.data.get("score", 0))
-            time_spent = int(request.data.get("time_spent", 0))
-        except (TypeError, ValueError):
-            return Response(
-                {"detail": "score / time_spent は整数で指定してください"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        params = CompleteLessonSerializer(data=request.data)
+        params.is_valid(raise_exception=True)
+        lesson_id = params.validated_data["lesson_id"]
+        score = params.validated_data["score"]
+        time_spent = params.validated_data["time_spent"]
 
-        if not 0 < lesson_id <= MAX_POSITIVE_INT:
+        if lesson_id > MAX_POSITIVE_INT:
             return Response(
                 {"detail": "レッスンが見つかりません"}, status=status.HTTP_404_NOT_FOUND
             )
@@ -201,16 +187,11 @@ def _record_progress(user, lesson, score, time_spent):
     progress = UserProgress.objects.filter(user_sub=user.sub, lesson=lesson).first()
     if progress is None:
         return UserProgress.objects.create(
-            user_sub=user.sub,
-            lesson=lesson,
-            username=user.username,
-            score=score,
-            time_spent=time_spent,
+            user_sub=user.sub, lesson=lesson, score=score, time_spent=time_spent
         )
     progress.score = max(progress.score, score)
     progress.time_spent = time_spent
-    progress.username = user.username or progress.username
-    progress.save(update_fields=["score", "time_spent", "username"])
+    progress.save(update_fields=["score", "time_spent"])
     return progress
 
 

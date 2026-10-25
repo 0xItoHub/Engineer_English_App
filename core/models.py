@@ -72,7 +72,7 @@ class UserProgress(models.Model):
     # 外部の認証基盤が発行するユーザー ID（ID トークンの sub）で本人を識別する。
     # 検索には (user_sub, lesson) の一意制約のインデックスを使う
     user_sub = models.CharField(max_length=255)
-    # 表示用のユーザー名（記録時点の値）
+    # ユーザー名の列（API の応答には含めず、新しい記録では保存しない。スキーマは現状のまま維持する）
     username = models.CharField(max_length=150, blank=True)
     lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, related_name="user_progress")
     completed_at = models.DateTimeField(auto_now_add=True)

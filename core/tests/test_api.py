@@ -157,7 +157,7 @@ def test_progress_list_returns_only_own_records(auth_client, user, lesson):
     body = auth_client.get("/api/progress/").json()
 
     assert len(body) == 1
-    assert body[0]["username"] == "alice"
+    assert "username" not in body[0]
 
 
 def test_progress_detail_of_other_user_returns_404(auth_client, user, lesson):
@@ -233,14 +233,16 @@ def test_complete_lesson_clamps_values(auth_client, user, lesson, score, time_sp
     assert (progress.score, progress.time_spent) == expected
 
 
-def test_complete_lesson_records_username_and_hides_sub(auth_client, user, lesson):
+def test_complete_lesson_hides_user_identifiers(auth_client, user, lesson):
     res = auth_client.post(COMPLETE_URL, {"lesson_id": lesson.id, "score": 70}, format="json")
 
     body = res.json()
-    assert body["username"] == "alice"
     assert body["lesson"] == lesson.id
     assert "user_sub" not in body
-    assert UserProgress.objects.get().user_sub == "sub-alice"
+    assert "username" not in body
+    progress = UserProgress.objects.get()
+    assert progress.user_sub == "sub-alice"
+    assert progress.username == ""
 
 
 def test_complete_lesson_keys_progress_by_sub(user, lesson):
@@ -296,6 +298,14 @@ def test_complete_lesson_returns_503_when_conflicts_persist(auth_client, lesson)
         {"lesson_id": [1]},
         {"lesson_id": 1, "score": "high"},
         {"lesson_id": 1, "time_spent": {"a": 1}},
+        {"lesson_id": True},
+        {"lesson_id": 1, "score": True},
+        {"lesson_id": 1, "time_spent": False},
+        {"lesson_id": 1.5},
+        {"lesson_id": 1, "score": 80.5},
+        {"lesson_id": 1, "score": None},
+        {"lesson_id": 0},
+        {"lesson_id": -1},
     ],
 )
 def test_complete_lesson_invalid_input_returns_400(api_client, lesson, payload):
@@ -310,7 +320,7 @@ def test_complete_lesson_non_object_body_returns_400(api_client, db, body):
     assert res.status_code == 400
 
 
-@pytest.mark.parametrize("lesson_id", [9999, 0, -1, 10**30])
+@pytest.mark.parametrize("lesson_id", [9999, 10**30])
 def test_complete_lesson_unknown_lesson_returns_404(api_client, db, lesson_id):
     res = api_client.post(COMPLETE_URL, {"lesson_id": lesson_id}, format="json")
     assert res.status_code == 404
@@ -348,7 +358,7 @@ def test_my_progress_returns_only_own_records(auth_client, user, lesson):
 
     assert res.status_code == 200
     assert len(body) == 1
-    assert body[0]["username"] == "alice"
+    assert "username" not in body[0]
     assert body[0]["scene_title"] == lesson.scene.title
 
 
@@ -467,3 +477,25 @@ def test_record_progress_does_not_use_get_or_create(auth_client, lesson):
         res = auth_client.post(COMPLETE_URL, {"lesson_id": lesson.id, "score": 70})
 
     assert res.status_code == 200
+
+
+def test_complete_lesson_accepts_integral_values(auth_client, user, lesson):
+    # 整数として解釈できる値（"80" や 80.0）は受け付ける
+    res = auth_client.post(
+        COMPLETE_URL,
+        {"lesson_id": str(lesson.id), "score": "80", "time_spent": 30.0},
+        format="json",
+    )
+
+    assert res.status_code == 200
+    progress = UserProgress.objects.get(user_sub=user.sub, lesson=lesson)
+    assert (progress.score, progress.time_spent) == (80, 30)
+
+
+def test_complete_lesson_validation_error_lists_fields(api_client, lesson):
+    res = api_client.post(COMPLETE_URL, {"lesson_id": lesson.id, "score": True}, format="json")
+
+    body = res.json()
+    assert res.status_code == 400
+    assert body["detail"] == "入力内容に誤りがあります。"
+    assert set(body["errors"]) == {"score"}
