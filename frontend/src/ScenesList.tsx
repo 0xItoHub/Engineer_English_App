@@ -15,8 +15,7 @@ import { keyframes } from "@mui/material/styles";
 import { 
   PlayArrow as PlayIcon,
   Book as BookIcon,
-  Chat as ChatIcon,
-  TrendingUp as TrendingUpIcon
+  Chat as ChatIcon
 } from "@mui/icons-material";
 import AnimatedCodeBackground from "./components/AnimatedCodeBackground";
 import HomeHero from "./components/HomeHero";
@@ -27,6 +26,7 @@ import { queryView } from "./lib/queryState";
 import { useLearningProgress } from "./hooks/useLearningProgress";
 import { usePageTitle } from "./hooks/usePageTitle";
 import { LoadingView, ProgressErrorAlert, QueryErrorAlert } from "./components/QueryStatus";
+import { DISPLAY_FONT_FAMILY } from "./theme";
 
 // カルーセル用画像（public/images/ 配下に配置してください）
 const heroImages = [
@@ -37,6 +37,9 @@ const heroImages = [
 
 // シーン一覧の要素 ID（「学習をはじめる」の移動先）
 const SCENE_LIST_ID = "scene-list";
+
+// カルーセルの高さ（スマートフォンでは低くして、シーン一覧まで早く届くようにする）
+const CAROUSEL_HEIGHT = { xs: 120, sm: 220 };
 
 // 無限スライドアニメーション
 const slide = keyframes`
@@ -79,37 +82,28 @@ const ScenesList: React.FC = () => {
 
       {/* コンテンツは前面 */}
       <Box sx={{ position: 'relative', zIndex: 1 }}>
-        {/* タイトルセクション */}
-        <Paper elevation={0} sx={{ p: 3, mb: 4, backgroundColor: "#f5f5f5", opacity: 0.98 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Box>
-              <Typography
-                variant="h6"
-                component="h1"
-                gutterBottom
-                sx={{ fontFamily: 'Cormorant Garamond, Playfair Display, serif', fontWeight: 400, letterSpacing: 1.2, lineHeight: 1.1 }}
-              >
-                コードは世界を跨ぐ
-                <Typography
-                  component="span"
-                  variant="subtitle1"
-                  sx={{ ml: 2, fontFamily: 'Cormorant Garamond, Playfair Display, serif', fontStyle: 'italic', fontWeight: 600, color: 'text.secondary' }}
-                >
-                  ~ Code crosses borders ~
-                </Typography>
-              </Typography>
-            </Box>
-            <Button
-              variant="outlined"
-              onClick={() => navigate("/progress")}
-              startIcon={<TrendingUpIcon />}
+        {/* アプリの概要と学習開始への導線（スマートフォンでも最初に表示する） */}
+        <HomeHero targetId={SCENE_LIST_ID} />
+
+        {/* キャッチコピーとイメージ画像 */}
+        <Paper elevation={0} sx={{ p: { xs: 2, sm: 3 }, mb: 4, backgroundColor: "#f5f5f5", opacity: 0.98 }}>
+          <Typography
+            variant="h6"
+            component="p"
+            sx={{ mb: 2, fontFamily: DISPLAY_FONT_FAMILY, fontWeight: 400, letterSpacing: 1.2, lineHeight: 1.1 }}
+          >
+            コードは世界を跨ぐ
+            <Typography
+              component="span"
+              variant="subtitle1"
+              sx={{ ml: 2, fontFamily: DISPLAY_FONT_FAMILY, fontStyle: 'italic', fontWeight: 600, color: 'text.secondary' }}
             >
-              学習履歴
-            </Button>
-          </Box>
+              ~ Code crosses borders ~
+            </Typography>
+          </Typography>
 
           {/* ヒーローカルーセル（装飾画像のため支援技術からは隠す） */}
-          <Box aria-hidden="true" sx={{ position: 'relative', height: 220, borderRadius: 0, overflow: 'hidden' }}>
+          <Box aria-hidden="true" sx={{ position: 'relative', height: CAROUSEL_HEIGHT, borderRadius: 0, overflow: 'hidden' }}>
             <Box
               sx={{
                 display: 'flex',
@@ -125,15 +119,12 @@ const ScenesList: React.FC = () => {
                   component="img"
                   src={src}
                   alt=""
-                  sx={{ width: `${100 / (heroImages.length * 2)}%`, height: '220px', objectFit: 'cover' }}
+                  sx={{ width: `${100 / (heroImages.length * 2)}%`, height: CAROUSEL_HEIGHT, objectFit: 'cover' }}
                 />
               ))}
             </Box>
           </Box>
         </Paper>
-
-        {/* アプリの概要と学習開始への導線 */}
-        <HomeHero targetId={SCENE_LIST_ID} />
 
         {/* 収録コンテンツの数（シーン一覧から集計） */}
         {scenes.length > 0 && <ContentStats stats={countContent(scenes)} />}
@@ -195,13 +186,13 @@ const ScenesList: React.FC = () => {
 
                       <CardActions>
                         <Button
-                          size="small"
                           startIcon={<PlayIcon />}
                           variant="contained"
                           fullWidth
                           onClick={() => handleStartLearning(scene.id)}
                           aria-label={`${scene.title} の学習を開始`}
                           sx={{
+                            minHeight: 44,
                             bgcolor: 'primary.light',
                             color: 'primary.contrastText',
                             '&:hover': { bgcolor: 'primary.main' },

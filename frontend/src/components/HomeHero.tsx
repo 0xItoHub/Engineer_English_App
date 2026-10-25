@@ -8,6 +8,7 @@ type Props = {
 };
 
 // ホーム画面の導入（アプリの概要と学習開始への導線）
+// 見出しはページの h1 として、アプリの目的を最初に伝える
 const HomeHero: React.FC<Props> = ({ targetId }) => {
   const handleStart = (e: React.MouseEvent<HTMLAnchorElement>) => {
     const target = document.getElementById(targetId);
@@ -25,7 +26,7 @@ const HomeHero: React.FC<Props> = ({ targetId }) => {
       elevation={0}
       sx={{ p: { xs: 3, sm: 4 }, mb: 4, bgcolor: "primary.main", color: "primary.contrastText" }}
     >
-      <Typography id="home-hero-title" variant="h5" component="h2" sx={{ mb: 1 }}>
+      <Typography id="home-hero-title" variant="h5" component="h1" sx={{ mb: 1 }}>
         エンジニアのための、実務に効く英語学習
       </Typography>
       <Typography variant="body1" sx={{ color: "#dbeafe", lineHeight: 1.8, maxWidth: 760 }}>
@@ -38,7 +39,7 @@ const HomeHero: React.FC<Props> = ({ targetId }) => {
           href={`#${targetId}`}
           onClick={handleStart}
           startIcon={<PlayIcon />}
-          sx={{ bgcolor: "common.white", color: "primary.main", "&:hover": { bgcolor: "#e5edf7" } }}
+          sx={{ minHeight: 44, bgcolor: "common.white", color: "primary.main", "&:hover": { bgcolor: "#e5edf7" } }}
         >
           学習をはじめる
         </Button>

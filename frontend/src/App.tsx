@@ -9,9 +9,10 @@ import {
   ThemeProvider, 
   Box,
   Snackbar,
-  Alert
+  Alert,
+  Button
 } from "@mui/material";
-import { School as SchoolIcon } from "@mui/icons-material";
+import { School as SchoolIcon, TrendingUp as TrendingUpIcon } from "@mui/icons-material";
 import ScenesList from "./ScenesList";
 import SceneDetail from "./SceneDetail";
 import LessonDetail from "./LessonDetail";
@@ -106,7 +107,7 @@ function App() {
             {/* ヘッダー */}
             <AppBar position="static" elevation={2}>
               <Toolbar>
-                <SchoolIcon sx={{ mr: 2 }} aria-hidden="true" />
+                <SchoolIcon sx={{ mr: { xs: 1, sm: 2 } }} aria-hidden="true" />
                 <Typography
                   variant="h6"
                   component={RouterLink}
@@ -116,6 +117,24 @@ function App() {
                 >
                   Engineer English App
                 </Typography>
+                {/* 学習履歴への導線（狭い画面ではアイコンのみ表示する） */}
+                <Button
+                  component={RouterLink}
+                  to="/progress"
+                  color="inherit"
+                  aria-label="学習履歴"
+                  startIcon={<TrendingUpIcon aria-hidden="true" />}
+                  sx={{
+                    flexShrink: 0,
+                    mr: 1,
+                    minHeight: 44,
+                    minWidth: 44,
+                    whiteSpace: 'nowrap',
+                    '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 }, ml: { xs: 0, sm: -0.5 } },
+                  }}
+                >
+                  <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>学習履歴</Box>
+                </Button>
                 <AuthControls onError={handleAuthError} />
               </Toolbar>
             </AppBar>

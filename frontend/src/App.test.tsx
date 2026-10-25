@@ -29,6 +29,16 @@ test('ヘッダー・メイン・フッターを表示し、トップにシー�
   expect(screen.getByRole('link', { name: '本文へスキップ' })).toHaveAttribute('href', '#main-content');
 
   expect(await screen.findByText('Daily Standup')).toBeInTheDocument();
+  // ヘッダーから学習履歴へ移動できる
+  expect(screen.getByRole('link', { name: '学習履歴' })).toHaveAttribute('href', '/progress');
+});
+
+test('ホームの h1 はアプリの目的を表し、キャッチコピーは見出しにしない', async () => {
+  renderWithClient(<App />);
+
+  expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('エンジニアのための、実務に効く英語学習');
+  expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+  expect(screen.getByText('コードは世界を跨ぐ', { exact: false }).tagName).toBe('P');
 });
 
 test('存在しない URL では「ページが見つかりませんでした」とホームへのボタンを表示する', async () => {
@@ -42,7 +52,7 @@ test('存在しない URL では「ページが見つかりませんでした」
     expect(await screen.findByText('Daily Standup')).toBeInTheDocument();
     expect(document.title).toBe('Engineer English App');
     // 画面遷移後はページの見出しへフォーカスを移す
-    expect(await screen.findByRole('heading', { level: 1, name: /コードは世界を跨ぐ/ })).toHaveFocus();
+    expect(await screen.findByRole('heading', { level: 1, name: 'エンジニアのための、実務に効く英語学習' })).toHaveFocus();
   } finally {
     window.history.pushState(null, '', '/');
   }

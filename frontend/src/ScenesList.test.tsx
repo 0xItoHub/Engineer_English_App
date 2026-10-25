@@ -95,7 +95,7 @@ test('概要・技術スタックを表示し、「学習をはじめる」で�
 
   renderScenesList();
 
-  expect(await screen.findByRole('heading', { level: 2, name: 'エンジニアのための、実務に効く英語学習' })).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { level: 1, name: 'エンジニアのための、実務に効く英語学習' })).toBeInTheDocument();
   expect(screen.getByRole('heading', { level: 2, name: '技術スタック' })).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole('link', { name: '学習をはじめる' }));
