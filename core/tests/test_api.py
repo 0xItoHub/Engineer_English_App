@@ -283,7 +283,7 @@ def test_complete_lesson_returns_503_when_conflicts_persist(auth_client, lesson)
         res = auth_client.post(COMPLETE_URL, {"lesson_id": lesson.id, "score": 60})
 
     assert res.status_code == 503
-    assert "error" in res.json()
+    assert "detail" in res.json()
     assert UserProgress.objects.count() == 0
 
 
@@ -301,7 +301,7 @@ def test_complete_lesson_returns_503_when_conflicts_persist(auth_client, lesson)
 def test_complete_lesson_invalid_input_returns_400(api_client, lesson, payload):
     res = api_client.post(COMPLETE_URL, payload, format="json")
     assert res.status_code == 400
-    assert "error" in res.json()
+    assert "detail" in res.json()
 
 
 @pytest.mark.parametrize("body", ["[1, 2]", '"text"', "not json"])

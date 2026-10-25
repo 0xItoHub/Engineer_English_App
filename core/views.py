@@ -24,6 +24,9 @@ from .throttles import CompleteLessonRateThrottle
 # PositiveIntegerField に保存できる上限（PostgreSQL の integer 型の最大値）
 MAX_POSITIVE_INT = 2_147_483_647
 
+# 競合が続いて記録できなかった場合のメッセージ
+BUSY_DETAIL ="混み合っているため記録できませんでした。時間をおいて再度お試しください"
+
 
 def _int_query_param(request, name):
     """クエリパラメータを整数として取得する（未指定は None、不正値は 400）。"""
@@ -132,14 +135,14 @@ class UserProgressViewSet(
         # 入力の検証・型変換（不正値は 500 ではなく 400 を返す）
         if not isinstance(request.data, dict):
             return Response(
-                {"error": "リクエスト本文はオブジェクト形式で指定してください"},
+                {"detail": "リクエスト本文はオブジェクト形式で指定してください"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         try:
             lesson_id = int(request.data.get("lesson_id"))
         except (TypeError, ValueError):
             return Response(
-                {"error": "lesson_id は整数で指定してください"},
+                {"detail": "lesson_id は整数で指定してください"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         try:
@@ -147,12 +150,14 @@ class UserProgressViewSet(
             time_spent = int(request.data.get("time_spent", 0))
         except (TypeError, ValueError):
             return Response(
-                {"error": "score / time_spent は整数で指定してください"},
+                {"detail": "score / time_spent は整数で指定してください"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         if not 0 < lesson_id <= MAX_POSITIVE_INT:
-            return Response({"error": "レッスンが見つかりません"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "レッスンが見つかりません"}, status=status.HTTP_404_NOT_FOUND
+            )
 
         # スコアを 0〜100 に、学習時間を 0〜保存可能な上限に制限
         score = min(max(0, score), 100)
@@ -161,7 +166,9 @@ class UserProgressViewSet(
         try:
             lesson = Lesson.objects.select_related("scene").get(id=lesson_id)
         except Lesson.DoesNotExist:
-            return Response({"error": "レッスンが見つかりません"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "レッスンが見つかりません"}, status=status.HTTP_404_NOT_FOUND
+            )
 
         if not request.user.is_authenticated:
             return Response(
@@ -178,10 +185,7 @@ class UserProgressViewSet(
                 lambda: _record_progress(request.user, lesson, score, time_spent)
             )
         except RetryExhausted:
-            return Response(
-                {"error": "混み合っているため記録できませんでした。時間をおいて再度お試しください"},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
+            return Response({"detail": BUSY_DETAIL}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         serializer = self.get_serializer(progress)
         return Response(serializer.data)
 

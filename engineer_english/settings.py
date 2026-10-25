@@ -143,7 +143,8 @@ DATABASES = build_databases(os.environ)
 # （`migrate --run-syncdb`）。Aurora DSQL が対応しない列型の変更を含む履歴を経由しないため。
 MIGRATION_MODULES = {"auth": None, "contenttypes": None}
 
-LANGUAGE_CODE = "en-us"
+# API のエラーメッセージ（DRF の既定のメッセージを含む）を日本語で返す
+LANGUAGE_CODE = "ja"
 TIME_ZONE = "Asia/Tokyo"
 USE_I18N = True
 USE_TZ = True
@@ -213,6 +214,8 @@ REST_FRAMEWORK = {
         # 学習完了の記録（POST /api/progress/complete_lesson/）は個別に厳しめの上限を設定
         "complete_lesson": os.getenv("DJANGO_THROTTLE_COMPLETE_LESSON", "30/min"),
     },
+    # エラー応答を {"detail": ...} 形式の JSON にそろえる（データベースの障害は 503）
+    "EXCEPTION_HANDLER": "core.exceptions.api_exception_handler",
 }
 
 # ログ設定: エラーや警告をコンソール（Lambda では CloudWatch Logs）へ出力する
