@@ -143,6 +143,30 @@ npm run build
 ```
 
 `build/` の内容を S3 にアップロードし、CloudFront から配信します。
+ファイルの種類ごとにキャッシュ期間を指定してアップロードします（GitHub Actions の `deploy.yml` も同じ手順です）。
+
+| 対象 | Cache-Control |
+|---|---|
+| `assets/*`（ファイル名にハッシュを含む JS / CSS） | `public, max-age=31536000, immutable` |
+| `images/*`・その他の静的ファイル | `public, max-age=86400` |
+| `index.html` | `no-cache`（毎回更新を確認） |
+
+手動でアップロードする場合は、次の順に実行します（`index.html` は新しいアセットのアップロード後に置き換えます）。
+
+```bash
+aws s3 sync build/assets "s3://${FRONTEND_BUCKET}/assets" --delete \
+  --cache-control "public, max-age=31536000, immutable"
+aws s3 sync build/images "s3://${FRONTEND_BUCKET}/images" --delete \
+  --cache-control "public, max-age=86400"
+aws s3 sync build/ "s3://${FRONTEND_BUCKET}" --delete \
+  --exclude "assets/*" --exclude "images/*" --exclude "index.html" \
+  --cache-control "public, max-age=86400"
+aws s3 cp build/index.html "s3://${FRONTEND_BUCKET}/index.html" \
+  --cache-control "no-cache" --content-type "text/html; charset=utf-8"
+```
+
+アップロード後は CloudFront のキャッシュを無効化（`/*`）します。
+
 API は同一オリジンの `/api/...` で呼び出すため、通常は `VITE_API_BASE_URL` を指定せずにビルドします。
 
 ビルド結果をローカルで確認する場合は、バックエンドを `http://127.0.0.1:8000` で起動したうえで `npm run preview` を実行します（`/api` は開発サーバーと同じくバックエンドへ中継されます）。
