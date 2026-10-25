@@ -17,7 +17,8 @@ resource "aws_lambda_function" "backend" {
   memory_size   = 512
 
   environment {
-    variables = {
+    # AI チャットの環境変数（local.chat_lambda_env）は、有効にした場合のみ追加される（infra/chat.tf）
+    variables = merge({
       DJANGO_SETTINGS_MODULE      = "engineer_english.settings"
       DJANGO_DEBUG                = var.django_debug
       DJANGO_ALLOWED_HOSTS        = local.allowed_hosts
@@ -37,7 +38,7 @@ resource "aws_lambda_function" "backend" {
       STARTUP_COPY_SEED_DB = var.startup_copy_seed_db
       # CloudFront がオリジンのカスタムヘッダー X-Origin-Verify で送る値（plan の出力では非表示）
       ORIGIN_VERIFY_SECRET = local.origin_verify_secret
-    }
+    }, local.chat_lambda_env)
   }
 
   # イメージの更新は GitHub Actions（.github/workflows/deploy.yml）が SHA タグ／ダイジェスト指定で行う。
@@ -45,6 +46,20 @@ resource "aws_lambda_function" "backend" {
   # 手動でイメージを切り替える場合は aws lambda update-function-code を使う（infra/README.md 参照）。
   lifecycle {
     ignore_changes = [image_uri]
+
+    # AI チャットを有効にする場合に必要な設定がそろっているかを確認する
+    precondition {
+      condition     = !contains(["gemini", "openai_compatible"], var.chat_provider) || var.chat_api_key_ssm_param_name != ""
+      error_message = "chat_provider が gemini / openai_compatible の場合は chat_api_key_ssm_param_name を指定してください。"
+    }
+    precondition {
+      condition     = var.chat_provider != "openai_compatible" || (var.chat_api_base_url != "" && var.chat_model != "")
+      error_message = "chat_provider が openai_compatible の場合は chat_api_base_url と chat_model を指定してください。"
+    }
+    precondition {
+      condition     = var.chat_provider != "bedrock" || length(var.chat_bedrock_resource_arns) > 0
+      error_message = "chat_provider が bedrock の場合は chat_bedrock_resource_arns を指定してください。"
+    }
   }
 }
 
