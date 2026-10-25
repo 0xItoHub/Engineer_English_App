@@ -15,7 +15,7 @@ const lesson = {
   description: '日報で使う表現',
   scene: 1,
   lesson_phrases: [{ id: 1, text_en: 'I fixed the bug.', text_ja: 'バグを修正しました。', note: '' }],
-  lesson_dialogues: [{ id: 2, speaker: 'A', line_en: 'Any blockers?', line_ja: '困っていることは？', order: 1 }],
+  lesson_dialogues: [{ id: 2, speaker: 'PM', line_en: 'Any blockers?', line_ja: '困っていることは？', order: 1 }],
 };
 
 function mockLessonApi() {
@@ -47,6 +47,7 @@ test('レッスン概要を表示し、ステップを進めてフレーズ・�
   renderLessonDetail();
 
   expect(await screen.findByRole('heading', { level: 1, name: /Daily report/ })).toBeInTheDocument();
+  expect(screen.getByText('日報で使う表現')).toBeInTheDocument();
   expect(screen.getByText('フレーズ: 1個')).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole('button', { name: '次へ' }));
@@ -54,9 +55,25 @@ test('レッスン概要を表示し、ステップを進めてフレーズ・�
 
   fireEvent.click(screen.getByRole('button', { name: '次へ' }));
   expect(screen.getByText('Any blockers?')).toBeInTheDocument();
+  expect(screen.getByText('PM（プロダクトマネージャー）')).toBeInTheDocument();
+  expect(screen.getByText('1 番目の発言')).toBeInTheDocument();
+  expect(screen.queryByText(/順序/)).not.toBeInTheDocument();
 
   fireEvent.click(screen.getByRole('button', { name: '前へ' }));
   expect(screen.getByText('I fixed the bug.')).toBeInTheDocument();
+});
+
+test('タイトルを繰り返すだけの説明の代わりに、レッスンの進め方を案内する', async () => {
+  mockedAxios.get.mockImplementation((url: string) =>
+    url.endsWith('/api/lessons/5/')
+      ? Promise.resolve({ data: { ...lesson, description: 'Daily Standup / Daily report' } })
+      : Promise.reject(new Error('unexpected'))
+  );
+  renderLessonDetail();
+
+  await screen.findByRole('heading', { level: 1, name: /Daily report/ });
+  expect(screen.queryByText('Daily Standup / Daily report')).not.toBeInTheDocument();
+  expect(screen.getByText('フレーズと対話を、読み上げを聞きながら順番に学びます。')).toBeInTheDocument();
 });
 
 test('音声読み上げ非対応の環境では読み上げボタンを無効化する', async () => {

@@ -40,6 +40,7 @@ import { visuallyHidden } from "./lib/a11y";
 import { useAppAuth } from "./lib/auth";
 import { pickEnglishVoice, utteranceLang } from "./lib/tts";
 import { findNextTarget } from "./lib/lessonNavigation";
+import { DEFAULT_LESSON_DESCRIPTION, lessonDescription, phraseNote, speakerLabel } from "./lib/labels";
 import {
   useCompleteLessonMutation,
   useLessonQuery,
@@ -358,8 +359,9 @@ const LessonContent: React.FC<{ lessonId: string | undefined }> = ({ lessonId })
           <Typography variant="h4" component="h1" gutterBottom>
             <span aria-hidden="true">📚</span> {lesson.title}
           </Typography>
+          {/* タイトルを繰り返すだけの説明の代わりに、レッスンの進め方を案内する */}
           <Typography variant="body1" color="text.secondary">
-            {lesson.description}
+            {lessonDescription(lesson.description, lesson.title) ?? DEFAULT_LESSON_DESCRIPTION}
           </Typography>
         </Paper>
       </Box>
@@ -426,7 +428,7 @@ const LessonContent: React.FC<{ lessonId: string | undefined }> = ({ lessonId })
                           <Box>
                             <Typography variant="h6" component="p" lang="en" gutterBottom>{p.text_en}</Typography>
                             <Typography variant="body1" color="text.secondary" gutterBottom>{p.text_ja}</Typography>
-                            {p.note && (<Typography variant="caption" color="text.secondary">メモ: {p.note}</Typography>)}
+                            {phraseNote(p.note) && (<Typography variant="body2" color="text.secondary">メモ: {phraseNote(p.note)}</Typography>)}
                           </Box>
                           <Box>
                             {renderSpeakButton(p.text_en, speakingId === p.id, () => speak(p))}
@@ -452,8 +454,28 @@ const LessonContent: React.FC<{ lessonId: string | undefined }> = ({ lessonId })
                     <Card key={d.id} variant="outlined">
                       <CardContent>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                          <Chip label={d.speaker} size="small" color="primary" />
-                          <Typography variant="body2" color="text.secondary">順序: {d.order}</Typography>
+                          {/* 発言の順番（番号のバッジ） */}
+                          <Box
+                            component="span"
+                            aria-hidden="true"
+                            sx={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              minWidth: 24,
+                              height: 24,
+                              px: 0.5,
+                              borderRadius: 12,
+                              bgcolor: 'grey.200',
+                              color: 'text.secondary',
+                              fontSize: 13,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {d.order}
+                          </Box>
+                          <Box component="span" sx={visuallyHidden}>{d.order} 番目の発言</Box>
+                          <Chip label={speakerLabel(d.speaker)} size="small" color="primary" />
                         </Box>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
                           <Typography variant="h6" component="p" lang="en" gutterBottom sx={{ mb: 0 }}>{d.line_en}</Typography>

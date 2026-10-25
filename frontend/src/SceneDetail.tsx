@@ -17,8 +17,10 @@ import {
   PlayArrow as PlayIcon,
   ArrowBack as ArrowBackIcon,
   School as SchoolIcon,
-  CheckCircle as CheckCircleIcon
+  CheckCircle as CheckCircleIcon,
+  Replay as ReplayIcon
 } from "@mui/icons-material";
+import { lessonDescription } from "./lib/labels";
 import { useSceneQuery } from "./lib/queries";
 import { parseId } from "./lib/params";
 import { isNotFoundError, queryView } from "./lib/queryState";
@@ -119,14 +121,15 @@ const SceneDetail: React.FC = () => {
                     const completed = completedLessonIds.has(lesson.id);
                     return (
                       <ListItem key={lesson.id} divider secondaryAction={
+                        // 完了したレッスンは「復習する」として案内する
                         <Button
                           variant="outlined"
-                          size="small"
-                          startIcon={<PlayIcon />}
+                          startIcon={completed ? <ReplayIcon /> : <PlayIcon />}
                           onClick={() => handleStartLesson(lesson.id)}
-                          aria-label={`${lesson.title} を開始`}
+                          aria-label={`${lesson.title} を${completed ? "復習する" : "開始"}`}
+                          sx={{ minHeight: 44, whiteSpace: 'nowrap' }}
                         >
-                          開始
+                          {completed ? "復習する" : "開始"}
                         </Button>
                       }>
                         <ListItemText
@@ -141,9 +144,9 @@ const SceneDetail: React.FC = () => {
                               ) : (
                                 <Chip size="small" variant="outlined" label="未学習" aria-label={`${lesson.title}: 未学習`} />
                               )}
-                              {lesson.description && (
-                                <Typography variant="caption" color="text.secondary">
-                                  {lesson.description}
+                              {lessonDescription(lesson.description, lesson.title) && (
+                                <Typography variant="body2" color="text.secondary">
+                                  {lessonDescription(lesson.description, lesson.title)}
                                 </Typography>
                               )}
                             </Box>

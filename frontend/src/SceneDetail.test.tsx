@@ -50,6 +50,9 @@ test('シーンのレッスン一覧と、レッスンごとの完了状況を�
   expect(document.title).toBe('Daily Standup | Engineer English App');
   expect(screen.getByLabelText('Yesterday I worked on...: 完了')).toHaveTextContent('完了');
   expect(screen.getByLabelText('Blockers: 未学習')).toHaveTextContent('未学習');
+  // 完了したレッスンは「復習する」、未学習のレッスンは「開始」で案内する
+  expect(screen.getByRole('button', { name: 'Yesterday I worked on... を復習する' })).toHaveTextContent('復習する');
+  expect(screen.getByRole('button', { name: 'Blockers を開始' })).toHaveTextContent('開始');
   // スコア（％）は表示しない
   expect(screen.queryByText(/%/)).not.toBeInTheDocument();
   expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
