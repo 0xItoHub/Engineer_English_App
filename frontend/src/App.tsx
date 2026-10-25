@@ -14,24 +14,29 @@ import {
 } from "@mui/material";
 import { School as SchoolIcon, TrendingUp as TrendingUpIcon } from "@mui/icons-material";
 import ScenesList from "./ScenesList";
-import SceneDetail from "./SceneDetail";
-import LessonDetail from "./LessonDetail";
-import ProgressHistory from "./ProgressHistory";
 import SiteFooter from "./components/SiteFooter";
 import ChatWidget from "./components/ChatWidget";
 import ErrorBoundary from "./components/ErrorBoundary";
-import NotFound from "./components/NotFound";
 import RouteChangeEffects from "./components/RouteChangeEffects";
-import { Contact, PrivacyPolicy, Terms } from "./pages/LegalPages";
+import { LoadingView } from "./components/QueryStatus";
 import { DISPLAY_FONT_FAMILY, theme } from "./theme";
 import AppAuthProvider from "./components/AppAuthProvider";
 import AuthControls from "./components/AuthControls";
-import AuthCallback from "./components/AuthCallback";
 import AuthSessionEffects, { type AuthNotice } from "./components/AuthSessionEffects";
 import { setupHttpInterceptors } from "./lib/http";
 import { setupAuthInterceptors } from "./lib/authHttp";
 import { getUserManager, isAuthEnabled, notifySessionExpired } from "./lib/auth";
 import axios from "axios";
+
+// ホーム以外の画面は、表示するときに読み込む（初回表示で読み込むコードを減らす）
+const SceneDetail = React.lazy(() => import("./SceneDetail"));
+const LessonDetail = React.lazy(() => import("./LessonDetail"));
+const ProgressHistory = React.lazy(() => import("./ProgressHistory"));
+const AuthCallback = React.lazy(() => import("./components/AuthCallback"));
+const NotFound = React.lazy(() => import("./components/NotFound"));
+const PrivacyPolicy = React.lazy(() => import("./pages/LegalPages").then((m) => ({ default: m.PrivacyPolicy })));
+const Terms = React.lazy(() => import("./pages/LegalPages").then((m) => ({ default: m.Terms })));
+const Contact = React.lazy(() => import("./pages/LegalPages").then((m) => ({ default: m.Contact })));
 
 // API は Cookie を使わないため、クロスオリジンでも資格情報は送信しない
 axios.defaults.withCredentials = false;
@@ -48,6 +53,8 @@ function AppRoutes() {
   return (
     <ErrorBoundary resetKey={location.pathname}>
       <RouteChangeEffects />
+      {/* 画面の読み込み中は、データの読み込み中と同じ表示にする */}
+      <React.Suspense fallback={<LoadingView />}>
       <Routes>
         <Route path="/" element={<ScenesList />} />
         <Route path="/scene/:id" element={<SceneDetail />} />
@@ -61,6 +68,7 @@ function AppRoutes() {
         {/* 該当するページが無い URL */}
         <Route path="*" element={<NotFound />} />
       </Routes>
+      </React.Suspense>
     </ErrorBoundary>
   );
 }
@@ -140,7 +148,7 @@ function App() {
 
             {/* フッター */}
             <SiteFooter />
-            {/* 右下AIチャット（ダミー。後でAPI差し替え） */}
+            {/* 右下の AI チャット（デモ。画面は最初に開いたときに読み込む） */}
             <ErrorBoundary>
               <ChatWidget />
             </ErrorBoundary>

@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import ChatWidget, { DEMO_GREETING } from './ChatWidget';
+import ChatWidget from './ChatWidget';
+import { DEMO_GREETING } from './ChatDialog';
 
 test('ボタンで開き、入力欄にフォーカスし、Esc で閉じてボタンにフォーカスが戻る', async () => {
   render(<ChatWidget />);
@@ -7,7 +8,8 @@ test('ボタンで開き、入力欄にフォーカスし、Esc で閉じてボ�
 
   openButton.focus();
   fireEvent.click(openButton);
-  const dialog = screen.getByRole('dialog', { name: 'AI チャット（デモ）' });
+  // チャットの画面は最初に開いたときに読み込む
+  const dialog = await screen.findByRole('dialog', { name: 'AI チャット（デモ）' });
   expect(dialog).toBeInTheDocument();
   // デモであることを最初のメッセージで伝える
   expect(screen.getByText(DEMO_GREETING)).toBeInTheDocument();
@@ -21,6 +23,6 @@ test('ボタンで開き、入力欄にフォーカスし、Esc で閉じてボ�
 test('「チャットを閉じる」ボタンで閉じられる', async () => {
   render(<ChatWidget />);
   fireEvent.click(screen.getByRole('button', { name: 'AI チャット（デモ）を開く' }));
-  fireEvent.click(screen.getByRole('button', { name: 'チャットを閉じる' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'チャットを閉じる' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 });

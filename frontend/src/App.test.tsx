@@ -1,5 +1,5 @@
 import { vi, type Mocked } from 'vitest';
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import axios from 'axios';
 import App from './App';
 import { renderWithClient } from './test/renderWithClient';
@@ -56,6 +56,16 @@ test('存在しない URL では「ページが見つかりませんでした」
   } finally {
     window.history.pushState(null, '', '/');
   }
+});
+
+test('ホーム以外の画面は表示するときに読み込み、読み込み後にページの見出しへフォーカスを移す', async () => {
+  renderWithClient(<App />);
+
+  expect(await screen.findByText('Daily Standup')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('link', { name: '学習履歴' }));
+  const heading = await screen.findByRole('heading', { level: 1, name: '学習履歴' });
+  await waitFor(() => expect(heading).toHaveFocus());
+  window.history.pushState(null, '', '/');
 });
 
 test.each([
