@@ -7,7 +7,6 @@ import {
   Container, 
   CssBaseline, 
   ThemeProvider, 
-  createTheme,
   Box,
   Snackbar,
   Alert
@@ -23,6 +22,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import NotFound from "./components/NotFound";
 import RouteChangeEffects from "./components/RouteChangeEffects";
 import { usePageTitle } from "./hooks/usePageTitle";
+import { DISPLAY_FONT_FAMILY, theme } from "./theme";
 import AppAuthProvider from "./components/AppAuthProvider";
 import AuthControls from "./components/AuthControls";
 import AuthCallback from "./components/AuthCallback";
@@ -70,41 +70,6 @@ function AppRoutes() {
   );
 }
 
-// カスタムテーマの作成
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: "#0A1A2F",   // さらに黒寄りの紺
-      dark: "#050B14",
-      light: "#24385A",
-      contrastText: "#ffffff",
-    },
-    secondary: { main: "#dc004e" },
-  },
-  typography: {
-    fontFamily: [
-      'Inter',
-      'Noto Sans JP',
-      'M PLUS Rounded 1c',
-      'system-ui',
-      '-apple-system',
-      'BlinkMacSystemFont',
-      'Segoe UI',
-      'Roboto',
-      'Helvetica Neue',
-      'Arial',
-      'sans-serif'
-    ].join(','),
-    h1: { fontWeight: 700 },
-    h2: { fontWeight: 700 },
-    h3: { fontWeight: 700 },
-    h4: { fontWeight: 600 },
-    h5: { fontWeight: 600 },
-    h6: { fontWeight: 600 },
-    button: { textTransform: 'none', fontWeight: 600 }
-  },
-  shape: { borderRadius: 10 }
-});
 
 function App() {
   // ログイン関連の通知（進捗の反映結果・有効期限切れなど）
@@ -147,7 +112,7 @@ function App() {
                   component={RouterLink}
                   to="/"
                   aria-label="Engineer English App ホームへ"
-                  sx={{ flexGrow: 1, minWidth: 0, mr: 1, color: 'inherit', textDecoration: 'none', fontFamily: `'Cormorant Garamond','Playfair Display',serif`, fontStyle: 'italic', letterSpacing: 0.5 }}
+                  sx={{ flexGrow: 1, minWidth: 0, mr: 1, color: 'inherit', textDecoration: 'none', fontFamily: DISPLAY_FONT_FAMILY, fontStyle: 'italic', fontWeight: 600, letterSpacing: 0.5 }}
                 >
                   Engineer English App
                 </Typography>
