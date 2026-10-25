@@ -3,7 +3,14 @@ from django.db import IntegrityError
 
 from core.models import Lesson, Phrase, Scene
 
-from .factories import make_dialogue, make_lesson, make_phrase, make_progress, make_scene
+from .factories import (
+    make_dialogue,
+    make_lesson,
+    make_phrase,
+    make_progress,
+    make_scene,
+    make_user,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -43,6 +50,12 @@ def test_user_progress_is_unique_per_user_and_lesson(user, lesson):
     make_progress(user, lesson)
     with pytest.raises(IntegrityError):
         make_progress(user, lesson)
+
+
+def test_user_progress_str_falls_back_to_sub(lesson):
+    progress = make_progress(make_user(username="", sub="sub-only"), lesson)
+
+    assert str(progress).startswith("sub-only - ")
 
 
 def test_deleting_scene_cascades(lesson):

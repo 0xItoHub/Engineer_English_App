@@ -1,4 +1,3 @@
-from django.contrib.auth.models import User
 from django.db import models
 
 
@@ -59,16 +58,24 @@ class Dialogue(models.Model):
 
 
 class UserProgress(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="progress")
+    # 外部の認証基盤が発行するユーザー ID（ID トークンの sub）で本人を識別する。
+    # 検索には (user_sub, lesson) の一意制約のインデックスを使う
+    user_sub = models.CharField(max_length=255)
+    # 表示用のユーザー名（記録時点の値）
+    username = models.CharField(max_length=150, blank=True)
     lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, related_name="user_progress")
     completed_at = models.DateTimeField(auto_now_add=True)
     score = models.PositiveIntegerField(default=0, help_text="学習スコア（0-100）")
     time_spent = models.PositiveIntegerField(default=0, help_text="学習時間（秒）")
 
     class Meta:
-        unique_together = ["user", "lesson"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user_sub", "lesson"], name="core_userprogress_unique_user_lesson"
+            )
+        ]
         ordering = ["-completed_at"]
 
     def __str__(self):
         completed = self.completed_at.strftime("%Y-%m-%d")
-        return f"{self.user.username} - {self.lesson.title} ({completed})"
+        return f"{self.username or self.user_sub} - {self.lesson.title} ({completed})"

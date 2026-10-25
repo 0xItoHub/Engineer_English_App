@@ -19,7 +19,7 @@ def api_client():
 
 
 @pytest.fixture
-def user(db):
+def user():
     return make_user()
 
 

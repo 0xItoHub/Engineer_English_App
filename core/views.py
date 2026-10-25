@@ -8,6 +8,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 
+from .db import RetryExhausted, run_in_transaction_with_retry
 from .models import Dialogue, Lesson, Phrase, Scene, UserProgress
 from .serializers import (
     DialogueSerializer,
@@ -51,7 +52,7 @@ class LessonSceneFilterMixin:
         return qs
 
 
-# 学習コンテンツは読み取り専用で公開する（編集は管理画面から行う）
+# 学習コンテンツは読み取り専用で公開する（内容は seed コマンドで投入・更新する）
 class SceneViewSet(viewsets.ReadOnlyModelViewSet):
     # ネストしたフレーズ・対話・レッスンをまとめて取得し、シーン数に依存しないクエリ数にする
     queryset = Scene.objects.prefetch_related("phrases", "dialogues", "lessons")
@@ -93,8 +94,8 @@ class UserProgressViewSet(
     記録は complete_lesson から行う。
     """
 
-    # シリアライザで参照するレッスン・シーン・ユーザーを JOIN で同時に取得する
-    queryset = UserProgress.objects.select_related("lesson__scene", "user")
+    # シリアライザで参照するレッスン・シーンを JOIN で同時に取得する
+    queryset = UserProgress.objects.select_related("lesson__scene")
     serializer_class = UserProgressSerializer
     permission_classes = [IsAuthenticated]
 
@@ -102,7 +103,7 @@ class UserProgressViewSet(
         user = self.request.user
         if not user.is_authenticated:
             return UserProgress.objects.none()
-        return super().get_queryset().filter(user=user)
+        return super().get_queryset().filter(user_sub=user.sub)
 
     @action(detail=False, methods=["get"], permission_classes=[AllowAny])
     def my_progress(self, request):
@@ -149,30 +150,46 @@ class UserProgressViewSet(
         time_spent = min(max(0, time_spent), MAX_POSITIVE_INT)
 
         try:
-            lesson = Lesson.objects.get(id=lesson_id)
-            if request.user.is_authenticated:
-                progress, created = UserProgress.objects.get_or_create(
-                    user=request.user,
-                    lesson=lesson,
-                    defaults={"score": score, "time_spent": time_spent},
-                )
-                if not created:
-                    progress.score = max(progress.score, score)
-                    progress.time_spent = time_spent
-                    progress.save()
-                serializer = self.get_serializer(progress)
-                return Response(serializer.data)
-            else:
-                return Response(
-                    {
-                        "ok": True,
-                        "lesson": lesson.id,
-                        "score": score,
-                        "time_spent": time_spent,
-                    }
-                )
+            lesson = Lesson.objects.select_related("scene").get(id=lesson_id)
         except Lesson.DoesNotExist:
             return Response({"error": "レッスンが見つかりません"}, status=status.HTTP_404_NOT_FOUND)
+
+        if not request.user.is_authenticated:
+            return Response(
+                {
+                    "ok": True,
+                    "lesson": lesson.id,
+                    "score": score,
+                    "time_spent": time_spent,
+                }
+            )
+
+        try:
+            progress = run_in_transaction_with_retry(
+                lambda: _record_progress(request.user, lesson, score, time_spent)
+            )
+        except RetryExhausted:
+            return Response(
+                {"error": "混み合っているため記録できませんでした。時間をおいて再度お試しください"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        serializer = self.get_serializer(progress)
+        return Response(serializer.data)
+
+
+def _record_progress(user, lesson, score, time_spent):
+    """学習の完了を記録する（最高スコアを保持し、学習時間は最新の値に更新する）。"""
+    progress, created = UserProgress.objects.get_or_create(
+        user_sub=user.sub,
+        lesson=lesson,
+        defaults={"username": user.username, "score": score, "time_spent": time_spent},
+    )
+    if not created:
+        progress.score = max(progress.score, score)
+        progress.time_spent = time_spent
+        progress.username = user.username or progress.username
+        progress.save(update_fields=["score", "time_spent", "username"])
+    return progress
 
 
 def home(request):
