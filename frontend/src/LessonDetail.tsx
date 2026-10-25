@@ -44,7 +44,7 @@ import { LoadingView, QueryErrorAlert } from "./components/QueryStatus";
 import { pushLocalProgress, readSpeechRate, removeLocalProgressEntry, writeLastLesson, writeSpeechRate } from "./lib/storage";
 import { visuallyHidden } from "./lib/a11y";
 import { useAppAuth } from "./lib/auth";
-import { pickEnglishVoice, utteranceLang } from "./lib/tts";
+import { getAudioClip, isAudioPlaybackSupported, pickEnglishVoice, preservePitch, utteranceLang } from "./lib/tts";
 import { findNextTarget } from "./lib/lessonNavigation";
 import { DEFAULT_LESSON_DESCRIPTION, lessonDescription, phraseNote, speakerLabel } from "./lib/labels";
 import {
@@ -105,11 +105,14 @@ const LessonContent: React.FC<{ lessonId: string | undefined }> = ({ lessonId })
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [notice, setNotice] = useState<CompletionNotice | null>(null);
 
-  // TTS（Web Speech API）
+  // 読み上げ（事前に生成した音声を再生し、音声が無い英文は Web Speech API で読み上げる）
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [speakingId, setSpeakingId] = useState<number | null>(null);
   const [speakingDialogueId, setSpeakingDialogueId] = useState<number | null>(null);
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  // 現在の読み上げ（音声の再生ごと・読み上げごとに新しくし、停止・切り替え済みの通知を見分ける）
+  const playbackRef = useRef<object | null>(null);
+  // 音声の再生に使う 1 つの audio 要素（最初の再生時に作る）
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   // 読み上げ速度（既定は標準の 1 倍。前回選んだ速度をブラウザに記憶する）
   const [speechRate, setSpeechRate] = useState<number>(() => readSpeechRate(SPEECH_RATES, DEFAULT_SPEECH_RATE));
   const changeSpeechRate = (rate: number) => {
@@ -137,16 +140,41 @@ const LessonContent: React.FC<{ lessonId: string | undefined }> = ({ lessonId })
   const resetSpeaking = () => {
     setSpeakingId(null);
     setSpeakingDialogueId(null);
-    utteranceRef.current = null;
+    playbackRef.current = null;
   };
 
-  // フレーズ・対話共通の読み上げ処理
-  const speakText = (text: string, target: { phraseId?: number; dialogueId?: number }) => {
-    if (!isSpeechSynthesisSupported()) return;
+  // 再生中の音声・読み上げ中の音声合成をすべて止める（表示は変えない）
+  const stopPlayback = () => {
+    playbackRef.current = null;
+    const audio = audioRef.current;
+    if (audio) {
+      audio.onended = null;
+      audio.onerror = null;
+      audio.pause();
+      audio.removeAttribute("src");
+    }
+    try {
+      if (isSpeechSynthesisSupported()) window.speechSynthesis.cancel();
+    } catch {
+      // 読み上げを停止できない環境では何もしない
+    }
+  };
+
+  type SpeakTarget = { phraseId?: number; dialogueId?: number };
+
+  const showSpeaking = (target: SpeakTarget) => {
+    setSpeakingId(target.phraseId ?? null);
+    setSpeakingDialogueId(target.dialogueId ?? null);
+  };
+
+  // Web Speech API（音声合成）で読み上げる（呼び出し前に stopPlayback で読み上げ中・待機中の音声を止める）
+  const speakWithSynthesis = (text: string, target: SpeakTarget) => {
+    if (!isSpeechSynthesisSupported()) {
+      resetSpeaking();
+      return;
+    }
     try {
       const synth = window.speechSynthesis;
-      // 読み上げ中・待機中の音声をすべて止めてから読み上げる
-      synth.cancel();
       const u = new SpeechSynthesisUtterance(text);
       const voice = pickEnglishVoice(voices.length > 0 ? voices : synth.getVoices());
       if (voice) u.voice = voice;
@@ -155,13 +183,12 @@ const LessonContent: React.FC<{ lessonId: string | undefined }> = ({ lessonId })
       u.pitch = 1.0;  // 標準ピッチ
       // 停止・切り替え済みの読み上げの終了通知では、現在の表示を変えない
       const finish = () => {
-        if (utteranceRef.current === u) resetSpeaking();
+        if (playbackRef.current === u) resetSpeaking();
       };
       u.onend = finish;
       u.onerror = finish;
-      utteranceRef.current = u;
-      setSpeakingId(target.phraseId ?? null);
-      setSpeakingDialogueId(target.dialogueId ?? null);
+      playbackRef.current = u;
+      showSpeaking(target);
       synth.speak(u);
     } catch (e) {
       console.error("TTS error", e);
@@ -169,29 +196,85 @@ const LessonContent: React.FC<{ lessonId: string | undefined }> = ({ lessonId })
     }
   };
 
+  // 事前に生成した音声を再生する（読み込み・再生に失敗した場合は音声合成で読み上げる）
+  const playClip = (clip: string, text: string, target: SpeakTarget) => {
+    const audio = audioRef.current ?? new Audio();
+    audioRef.current = audio;
+    audio.preload = "none";
+    const token = {};
+    const isCurrent = () => playbackRef.current === token;
+    const fallback = () => {
+      if (!isCurrent()) return;
+      stopPlayback();
+      speakWithSynthesis(text, target);
+    };
+    // 停止・切り替え済みの再生の終了・エラーの通知では、現在の表示を変えない
+    audio.onended = () => {
+      if (isCurrent()) resetSpeaking();
+    };
+    audio.onerror = fallback;
+    audio.src = clip;
+    // src の設定で再生速度が初期値に戻るため、設定した後に速度を指定する
+    audio.defaultPlaybackRate = speechRate;
+    audio.playbackRate = speechRate;
+    preservePitch(audio);
+    playbackRef.current = token;
+    showSpeaking(target);
+    try {
+      void Promise.resolve(audio.play()).catch(fallback);
+    } catch {
+      fallback();
+    }
+  };
+
+  // フレーズ・対話共通の読み上げ処理
+  const speakText = (text: string, target: SpeakTarget) => {
+    // 再生中・読み上げ中の音声をすべて止めてから読み上げる
+    stopPlayback();
+    const clip = isAudioPlaybackSupported() ? getAudioClip(text) : undefined;
+    if (clip) playClip(clip, text, target);
+    else speakWithSynthesis(text, target);
+  };
+
   const speak = (phrase: Phrase) => speakText(phrase.text_en, { phraseId: phrase.id });
 
   const speakDialogue = (dialogue: Dialogue) => speakText(dialogue.line_en, { dialogueId: dialogue.id });
 
   const stopSpeaking = () => {
-    try {
-      window.speechSynthesis?.cancel();
-    } catch {
-      // 読み上げを停止できない環境では何もしない
-    }
+    stopPlayback();
     resetSpeaking();
   };
 
+  // 再生中に速度を切り替えた場合も、すぐに新しい速度で再生する
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.defaultPlaybackRate = speechRate;
+    audio.playbackRate = speechRate;
+  }, [speechRate]);
+
   useEffect(() => {
     return () => {
-      // アンマウント時に停止
+      // アンマウント時（画面の移動・別のレッスンへの切り替え）に停止する
+      const audio = audioRef.current;
+      if (audio) {
+        audio.onended = null;
+        audio.onerror = null;
+        audio.pause();
+        audio.removeAttribute("src");
+      }
+      audioRef.current = null;
       try { window.speechSynthesis?.cancel(); } catch { /* 読み上げ非対応の環境では何もしない */ }
     };
   }, []);
 
-  // 読み上げボタン（非対応ブラウザでは無効化して案内を表示）
+  // 英文を読み上げられるか（音声ファイルがあるか、音声合成を利用できる場合）
+  const audioSupported = isAudioPlaybackSupported();
+  const canSpeak = (text: string) => ttsSupported || (audioSupported && getAudioClip(text) !== undefined);
+
+  // 読み上げボタン（読み上げられない場合は無効化して案内を表示）
   const renderSpeakButton = (label: string, speaking: boolean, onSpeak: () => void) => {
-    if (!ttsSupported) {
+    if (!canSpeak(label)) {
       return (
         <Tooltip title="お使いのブラウザは音声読み上げに対応していません">
           <span>
@@ -217,8 +300,8 @@ const LessonContent: React.FC<{ lessonId: string | undefined }> = ({ lessonId })
     );
   };
 
-  // 読み上げ速度の切り替え（読み上げ対応時のみ表示）
-  const speechRateControl = ttsSupported ? (
+  // 読み上げ速度の切り替え（ステップ内の英文を読み上げられる場合のみ表示）
+  const speechRateControl = (texts: readonly string[]) => texts.some(canSpeak) ? (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
       <Typography variant="body2" color="text.secondary" id="speech-rate-label">読み上げ速度</Typography>
       <ToggleButtonGroup
@@ -320,6 +403,28 @@ const LessonContent: React.FC<{ lessonId: string | undefined }> = ({ lessonId })
     if (lessonIdForResume === undefined || sceneIdForResume === undefined) return;
     writeLastLesson({ lesson: lessonIdForResume, scene: sceneIdForResume });
   }, [lessonIdForResume, sceneIdForResume]);
+
+  // 表示中のステップの音声だけを先に読み込み、最初の再生を待たずに始められるようにする
+  const stepClips = (() => {
+    if (!lesson || !isAudioPlaybackSupported()) return "";
+    const texts = [
+      ...(currentStep === 1 || currentStep === 3 ? (lesson.lesson_phrases ?? []).map((p) => p.text_en) : []),
+      ...(currentStep === 2 || currentStep === 3 ? (lesson.lesson_dialogues ?? []).map((d) => d.line_en) : []),
+    ];
+    return texts.map((t) => getAudioClip(t)).filter((c): c is string => !!c).join("\n");
+  })();
+  useEffect(() => {
+    if (!stepClips) return;
+    const preloads = stepClips.split("\n").map((clip) => {
+      const audio = new Audio();
+      audio.preload = "auto";
+      audio.src = clip;
+      return audio;
+    });
+    return () => {
+      for (const audio of preloads) audio.removeAttribute("src");
+    };
+  }, [stepClips]);
 
   if (lessonNumber === null || (view === "error" && isNotFoundError(lessonQuery.error))) {
     return <NotFound />;
@@ -433,7 +538,7 @@ const LessonContent: React.FC<{ lessonId: string | undefined }> = ({ lessonId })
           {currentStep === 1 && (
             <Box>
               <Typography {...stepHeadingProps}><AutoStoriesIcon color="primary" aria-hidden="true" />フレーズ学習</Typography>
-              {lesson.lesson_phrases && lesson.lesson_phrases.length > 0 && speechRateControl}
+              {speechRateControl(phrases.map((p) => p.text_en))}
               {lesson.lesson_phrases && lesson.lesson_phrases.length > 0 ? (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   {lesson.lesson_phrases.map((p) => (
@@ -462,7 +567,7 @@ const LessonContent: React.FC<{ lessonId: string | undefined }> = ({ lessonId })
           {currentStep === 2 && (
             <Box>
               <Typography {...stepHeadingProps}><ForumIcon color="primary" aria-hidden="true" />対話練習</Typography>
-              {lesson.lesson_dialogues && lesson.lesson_dialogues.length > 0 && speechRateControl}
+              {speechRateControl(dialogues.map((d) => d.line_en))}
               {lesson.lesson_dialogues && lesson.lesson_dialogues.length > 0 ? (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   {lesson.lesson_dialogues.map((d) => (
@@ -517,7 +622,7 @@ const LessonContent: React.FC<{ lessonId: string | undefined }> = ({ lessonId })
                   ? "このレッスンで学んだ表現です。読み上げを聞いて、いつでも振り返れます。"
                   : "このレッスンで学んだ表現を振り返りましょう。「レッスン完了」を押すと学習履歴に記録されます。"}
               </Typography>
-              {(phrases.length > 0 || dialogues.length > 0) && speechRateControl}
+              {speechRateControl([...phrases.map((p) => p.text_en), ...dialogues.map((d) => d.line_en)])}
               {phrases.length > 0 && (
                 <Box component="section" aria-labelledby="recap-phrases-title" sx={{ mb: 2 }}>
                   <Typography id="recap-phrases-title" variant="subtitle1" component="h3" sx={{ fontWeight: 600, mb: 1 }}>
