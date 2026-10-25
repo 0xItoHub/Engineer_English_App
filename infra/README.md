@@ -185,3 +185,36 @@ ECR リポジトリ自体はこの構成の管理外のため、ポリシーの�
 | CloudFront 無効化 | 月 1,000 パスまで無料（`/*` は 1 パスとして計上） |
 
 すべて有効にしても、追加費用は月額 $1 未満が目安です。
+
+## 6. Aurora DSQL の初期設定（初回のみ）
+
+`dsql.tf` で作成したクラスターに、アプリ用のデータベースロールとスキーマを作成します。
+Lambda はデータベースロール `app` として IAM 認証で接続し（管理者 `admin` では接続しません）、スキーマ `app` にテーブルを作成します。
+
+1. 管理者の IAM 認証トークンで `admin` として接続します（`psql` の例）。
+
+```bash
+REGION=ap-northeast-1
+ENDPOINT=$(terraform -chdir=infra output -raw dsql_endpoint)
+export PGPASSWORD=$(aws dsql generate-db-connect-admin-auth-token \
+  --region "$REGION" --hostname "$ENDPOINT")
+PGSSLMODE=require psql --host "$ENDPOINT" --username admin --dbname postgres
+```
+
+2. 次の SQL を 1 文ずつ実行します（DSQL では DDL を 1 トランザクションに 1 文ずつ実行します）。
+   `<lambda_exec_role_arn>` は Lambda の実行ロールの ARN に置き換えてください。
+
+```sql
+CREATE ROLE app WITH LOGIN;
+AWS IAM GRANT app TO '<lambda_exec_role_arn>';
+CREATE SCHEMA app;
+GRANT USAGE, CREATE ON SCHEMA app TO app;
+```
+
+3. Lambda を直接呼び出して、テーブル作成（`migrate`）と学習データの投入（`seed`）を行います。手順はルートの [README](../README.md) の「データベースの初期化」を参照してください。
+
+| 環境変数（Lambda） | 既定値 | 内容 |
+| --- | --- | --- |
+| `DSQL_CLUSTER_ENDPOINT` | （Terraform が設定） | 設定されていると Aurora DSQL に接続する |
+| `DSQL_DB_USER` | `app` | 接続するデータベースロール |
+| `DSQL_SCHEMA` | `app` | テーブルを作成・参照するスキーマ（`search_path`） |

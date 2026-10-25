@@ -26,7 +26,8 @@ cp .env.example .env
 set -a; source .env; set +a
 
 # DB を作成し、学習データを投入
-python manage.py migrate
+# （auth / contenttypes はマイグレーション履歴を持たないため --run-syncdb でテーブルを作成します）
+python manage.py migrate --run-syncdb
 python manage.py seed_six_scenes
 
 # 開発サーバを起動（http://127.0.0.1:8000）
@@ -34,6 +35,26 @@ python manage.py runserver
 ```
 
 `.env.example` の既定値では `DJANGO_DEBUG=True` になります。ローカルの SQLite はリポジトリ直下の `db.sqlite3` に作成されます。
+
+### データベースの切り替え
+
+`engineer_english/settings.py` の `build_databases()` が環境変数から接続先を決めます。
+
+| 条件 | 接続先 |
+|---|---|
+| `DSQL_CLUSTER_ENDPOINT` 未設定（既定） | SQLite（`SQLITE_PATH`、未指定なら `db.sqlite3`） |
+| `DSQL_CLUSTER_ENDPOINT` 設定あり | Aurora DSQL（アダプタ `aurora-dsql-django`、IAM 認証） |
+
+- テスト・CI・コンテナイメージのビルドは SQLite で動作します（DSQL への接続は不要）。
+- DSQL では主キーを整数の連番（`USE_SEQUENCE_AUTOFIELDS`、キャッシュ 1）で採番し、テーブルはスキーマ `DSQL_SCHEMA`（既定 `app`）に作成します。
+- `core/migrations/0001_initial.py` は、参照先のテーブルから順に外部キーを含めて作成する構成です。モデルを変更するときは、DSQL の制約（列の型変更や既存テーブルへの NOT NULL 外部キー追加は不可、1 トランザクションの変更は 3,000 行まで）に収まるマイグレーションにしてください。
+- 同時更新の競合（SQLSTATE `40001` / `OC000` / `OC001`）は `core/db.py` の `run_in_transaction_with_retry()` でトランザクションごと再試行します。
+
+### ユーザーの識別
+
+ログイン機能は外部の認証基盤で提供する予定で、現在の API は既定の認証方式を持ちません。
+認証済みのリクエストでは `request.user` が `core.auth.ExternalUser`（認証基盤のユーザー ID `sub` とユーザー名を持つ）になり、学習進捗は `UserProgress.user_sub` で本人のものだけを扱います。
+テストでは `APIClient.force_authenticate(user=ExternalUser(sub="sub-alice", username="alice"))` で認証済みの状態を再現します。
 
 ## フロントエンド（React）
 
@@ -115,3 +136,4 @@ pre-commit run --all-files   # 初回や設定変更時に全ファイルへ実�
    - Terraform のステートは S3 バックエンド（`infra/backend.tf`）で管理します
    - Lambda のイメージ URI などの値は `infra/terraform.tfvars` で指定します（コミットしません）
 4. Django の `SECRET_KEY` は SSM Parameter Store の SecureString に保存し、Lambda からはパラメータ名（`DJANGO_SECRET_KEY_SSM_PARAM`）で参照します
+5. データベース（Aurora DSQL）のテーブル作成と学習データの投入は、Lambda の直接呼び出し（`{"manage":"migrate"}` / `{"manage":"seed"}`）で行います（[README](README.md) の「データベースの初期化」）

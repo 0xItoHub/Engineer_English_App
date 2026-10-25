@@ -7,7 +7,7 @@
 - バックエンド: Django
 - フロントエンド: React
 - インフラ: AWS Lambda（コンテナ）+ API Gateway HTTP API + S3 + CloudFront
-- DB: SQLite
+- DB: Aurora DSQL（本番）/ SQLite（ローカル開発・テスト）
 
 
 ## サイト
@@ -67,9 +67,35 @@ docker push
 cd infra
 terraform init
 terraform apply
-
-> SQLite は Lambda の `/tmp/db.sqlite3` を使用（コールドスタートで消える可能性あり）。永続化が必要になったら RDS に切替を推奨。
 ```
+
+4) **データベースの初期化（初回とモデル変更時）**
+
+本番のデータは Aurora DSQL に保存します。Lambda を直接呼び出して、テーブル作成と学習データの投入を行います（初回のみ、事前に [infra/README.md](infra/README.md) の「Aurora DSQL の初期設定」を実施）。
+```bash
+FUNCTION=<lambda_function_name>
+aws lambda invoke --function-name "$FUNCTION" --cli-binary-format raw-in-base64-out \
+  --payload '{"manage":"migrate"}' /dev/stdout
+aws lambda invoke --function-name "$FUNCTION" --cli-binary-format raw-in-base64-out \
+  --payload '{"manage":"seed"}' /dev/stdout
+aws lambda invoke --function-name "$FUNCTION" --cli-binary-format raw-in-base64-out \
+  --payload '{"manage":"check"}' /dev/stdout   # 件数の確認
+```
+
+- 実行できる操作は `migrate` / `seed` / `check` の 3 つだけです（それ以外は `"status": "rejected"` を返します）。
+- `{"manage": ...}` 形式のイベントは `lambda:InvokeFunction` 権限を持つ IAM プリンシパルからの直接呼び出しでのみ届きます（API Gateway 経由のリクエストはこの形式になりません）。
+- `seed` は何度実行しても同じ内容・同じ ID になります。
+
+### データベース
+| 環境 | DB | 設定 |
+|---|---|---|
+| 本番（Lambda） | Aurora DSQL（IAM 認証、スキーマ `app`） | `DSQL_CLUSTER_ENDPOINT` が設定されていると自動で選択 |
+| ローカル開発・テスト・CI | SQLite | `DSQL_CLUSTER_ENDPOINT` 未設定時（既定） |
+
+- 接続のたびに IAM 認証トークンを生成するため、DB のパスワードは保持しません。通信は TLS（`verify-full`）で暗号化し、サーバ証明書を検証します。
+- 主キーは整数の連番（`/scene/1` のような URL をそのまま利用可能）です。
+- DSQL は楽観的同時実行制御のため、学習完了の記録は競合時にトランザクションごと自動で再試行します。
+
 ### デプロイ時に設定する値
 Lambda の環境変数は Terraform（`infra/lambda_api.tf`）で管理します。`infra/terraform.tfvars` で指定する主な値:
 
