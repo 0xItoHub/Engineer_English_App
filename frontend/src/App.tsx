@@ -7,30 +7,36 @@ import {
   Container, 
   CssBaseline, 
   ThemeProvider, 
-  createTheme,
   Box,
   Snackbar,
-  Alert
+  Alert,
+  Button
 } from "@mui/material";
-import { School as SchoolIcon } from "@mui/icons-material";
+import { School as SchoolIcon, TrendingUp as TrendingUpIcon } from "@mui/icons-material";
 import ScenesList from "./ScenesList";
-import SceneDetail from "./SceneDetail";
-import LessonDetail from "./LessonDetail";
-import ProgressHistory from "./ProgressHistory";
 import SiteFooter from "./components/SiteFooter";
 import ChatWidget from "./components/ChatWidget";
 import ErrorBoundary from "./components/ErrorBoundary";
-import NotFound from "./components/NotFound";
 import RouteChangeEffects from "./components/RouteChangeEffects";
-import { usePageTitle } from "./hooks/usePageTitle";
+import { LoadingView } from "./components/QueryStatus";
+import { DISPLAY_FONT_FAMILY, theme } from "./theme";
 import AppAuthProvider from "./components/AppAuthProvider";
 import AuthControls from "./components/AuthControls";
-import AuthCallback from "./components/AuthCallback";
 import AuthSessionEffects, { type AuthNotice } from "./components/AuthSessionEffects";
 import { setupHttpInterceptors } from "./lib/http";
 import { setupAuthInterceptors } from "./lib/authHttp";
 import { getUserManager, isAuthEnabled, notifySessionExpired } from "./lib/auth";
 import axios from "axios";
+
+// ホーム以外の画面は、表示するときに読み込む（初回表示で読み込むコードを減らす）
+const SceneDetail = React.lazy(() => import("./SceneDetail"));
+const LessonDetail = React.lazy(() => import("./LessonDetail"));
+const ProgressHistory = React.lazy(() => import("./ProgressHistory"));
+const AuthCallback = React.lazy(() => import("./components/AuthCallback"));
+const NotFound = React.lazy(() => import("./components/NotFound"));
+const PrivacyPolicy = React.lazy(() => import("./pages/LegalPages").then((m) => ({ default: m.PrivacyPolicy })));
+const Terms = React.lazy(() => import("./pages/LegalPages").then((m) => ({ default: m.Terms })));
+const Contact = React.lazy(() => import("./pages/LegalPages").then((m) => ({ default: m.Contact })));
 
 // API は Cookie を使わないため、クロスオリジンでも資格情報は送信しない
 axios.defaults.withCredentials = false;
@@ -41,70 +47,32 @@ if (isAuthEnabled) {
 // 4xx / 5xx を一元的に処理（ログ出力とユーザー向けメッセージの付与）
 setupHttpInterceptors(axios);
 
-// 準備中のページ（タイトルのみ設定する）
-function PlaceholderPage({ title }: { title: string }) {
-  usePageTitle(title);
-  return <div>{title}（準備中）</div>;
-}
-
 // ルーティング部分（画面遷移時にエラー表示をリセットし、先頭へのスクロールと見出しへのフォーカスを行う）
 function AppRoutes() {
   const location = useLocation();
   return (
     <ErrorBoundary resetKey={location.pathname}>
       <RouteChangeEffects />
+      {/* 画面の読み込み中は、データの読み込み中と同じ表示にする */}
+      <React.Suspense fallback={<LoadingView />}>
       <Routes>
         <Route path="/" element={<ScenesList />} />
         <Route path="/scene/:id" element={<SceneDetail />} />
         <Route path="/lesson/:lessonId" element={<LessonDetail />} />
         <Route path="/progress" element={<ProgressHistory />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
-        {/* 体裁用のダミーページ（必要に応じて中身を実装） */}
-        <Route path="/terms" element={<PlaceholderPage title="利用規約" />} />
-        <Route path="/privacy" element={<PlaceholderPage title="プライバシーポリシー" />} />
-        <Route path="/contact" element={<PlaceholderPage title="お問い合わせ" />} />
+        {/* 規約・ポリシー・お問い合わせ */}
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/contact" element={<Contact />} />
         {/* 該当するページが無い URL */}
         <Route path="*" element={<NotFound />} />
       </Routes>
+      </React.Suspense>
     </ErrorBoundary>
   );
 }
 
-// カスタムテーマの作成
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: "#0A1A2F",   // さらに黒寄りの紺
-      dark: "#050B14",
-      light: "#24385A",
-      contrastText: "#ffffff",
-    },
-    secondary: { main: "#dc004e" },
-  },
-  typography: {
-    fontFamily: [
-      'Inter',
-      'Noto Sans JP',
-      'M PLUS Rounded 1c',
-      'system-ui',
-      '-apple-system',
-      'BlinkMacSystemFont',
-      'Segoe UI',
-      'Roboto',
-      'Helvetica Neue',
-      'Arial',
-      'sans-serif'
-    ].join(','),
-    h1: { fontWeight: 700 },
-    h2: { fontWeight: 700 },
-    h3: { fontWeight: 700 },
-    h4: { fontWeight: 600 },
-    h5: { fontWeight: 600 },
-    h6: { fontWeight: 600 },
-    button: { textTransform: 'none', fontWeight: 600 }
-  },
-  shape: { borderRadius: 10 }
-});
 
 function App() {
   // ログイン関連の通知（進捗の反映結果・有効期限切れなど）
@@ -141,16 +109,34 @@ function App() {
             {/* ヘッダー */}
             <AppBar position="static" elevation={2}>
               <Toolbar>
-                <SchoolIcon sx={{ mr: 2 }} aria-hidden="true" />
+                <SchoolIcon sx={{ mr: { xs: 1, sm: 2 } }} aria-hidden="true" />
                 <Typography
                   variant="h6"
                   component={RouterLink}
                   to="/"
                   aria-label="Engineer English App ホームへ"
-                  sx={{ flexGrow: 1, minWidth: 0, mr: 1, color: 'inherit', textDecoration: 'none', fontFamily: `'Cormorant Garamond','Playfair Display',serif`, fontStyle: 'italic', letterSpacing: 0.5 }}
+                  sx={{ flexGrow: 1, minWidth: 0, mr: 1, color: 'inherit', textDecoration: 'none', fontFamily: DISPLAY_FONT_FAMILY, fontStyle: 'italic', fontWeight: 600, letterSpacing: 0.5 }}
                 >
                   Engineer English App
                 </Typography>
+                {/* 学習履歴への導線（狭い画面ではアイコンのみ表示する） */}
+                <Button
+                  component={RouterLink}
+                  to="/progress"
+                  color="inherit"
+                  aria-label="学習履歴"
+                  startIcon={<TrendingUpIcon aria-hidden="true" />}
+                  sx={{
+                    flexShrink: 0,
+                    mr: 1,
+                    minHeight: 44,
+                    minWidth: 44,
+                    whiteSpace: 'nowrap',
+                    '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 }, ml: { xs: 0, sm: -0.5 } },
+                  }}
+                >
+                  <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>学習履歴</Box>
+                </Button>
                 <AuthControls onError={handleAuthError} />
               </Toolbar>
             </AppBar>
@@ -162,7 +148,7 @@ function App() {
 
             {/* フッター */}
             <SiteFooter />
-            {/* 右下AIチャット（ダミー。後でAPI差し替え） */}
+            {/* 右下の AI チャット（デモ。画面は最初に開いたときに読み込む） */}
             <ErrorBoundary>
               <ChatWidget />
             </ErrorBoundary>

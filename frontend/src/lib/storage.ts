@@ -157,3 +157,36 @@ export function subscribeLocalProgress(onChange: () => void): () => void {
     window.removeEventListener(LOCAL_PROGRESS_EVENT, onChange);
   };
 }
+
+// ---- 読み上げ速度（ブラウザごとに前回選んだ速度を使う） ----
+
+export const SPEECH_RATE_KEY = "ee_speech_rate";
+
+// 選択肢に含まれる速度だけを読み込む（保存されていない・形式が正しくない場合は既定値）
+export function readSpeechRate(allowed: readonly number[], fallback: number): number {
+  const value = readJSON<unknown>(SPEECH_RATE_KEY, null);
+  return typeof value === "number" && allowed.includes(value) ? value : fallback;
+}
+
+export function writeSpeechRate(rate: number): boolean {
+  return writeJSON(SPEECH_RATE_KEY, rate);
+}
+
+// ---- 最後に開いたレッスン（ホームの「続きから」に使う） ----
+
+export const LAST_LESSON_KEY = "ee_last_lesson";
+
+export type LastLesson = { lesson: number; scene: number };
+
+const isPositiveInteger = (v: unknown): v is number => typeof v === "number" && Number.isSafeInteger(v) && v > 0;
+
+export function readLastLesson(): LastLesson | null {
+  const value = readJSON<Partial<LastLesson> | null>(LAST_LESSON_KEY, null);
+  if (!value || typeof value !== "object") return null;
+  return isPositiveInteger(value.lesson) && isPositiveInteger(value.scene) ? { lesson: value.lesson, scene: value.scene } : null;
+}
+
+export function writeLastLesson(value: LastLesson): boolean {
+  if (!isPositiveInteger(value.lesson) || !isPositiveInteger(value.scene)) return false;
+  return writeJSON(LAST_LESSON_KEY, { lesson: value.lesson, scene: value.scene });
+}

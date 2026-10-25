@@ -7,27 +7,29 @@ import {
   Box,
   Button,
   Paper,
-  Container,
   Chip,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
-  TableRow
+  TableRow,
+  useMediaQuery
 } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 import { 
-  ArrowBack as ArrowBackIcon,
   School as SchoolIcon,
   CollectionsBookmark as CollectionsBookmarkIcon,
   CheckCircle as CheckCircleIcon,
-  AccessTime as AccessTimeIcon
+  AccessTime as AccessTimeIcon,
+  BarChart as BarChartIcon
 } from "@mui/icons-material";
 import { useScenesQuery, type ProgressItem, type Scene } from "./lib/queries";
 import { queryView } from "./lib/queryState";
 import { useLearningProgress } from "./hooks/useLearningProgress";
 import { usePageTitle } from "./hooks/usePageTitle";
 import { LoadingView, QueryErrorAlert } from "./components/QueryStatus";
+import PageBreadcrumbs from "./components/PageBreadcrumbs";
 
 type Progress = {
   id?: number;
@@ -74,6 +76,9 @@ const ProgressHistory: React.FC = () => {
   const scenesQuery = useScenesQuery();
   const view = queryView(progressQuery);
   usePageTitle("学習履歴");
+  // スマートフォンでは表の代わりにカードの一覧で表示する
+  const theme = useTheme();
+  const compact = useMediaQuery(theme.breakpoints.down("sm"));
   // ログイン状態の確認中は、表示するユーザーが確定するまで読み込み中とする
   const loading = authLoading || view === "loading" || scenesQuery.isLoading;
 
@@ -110,14 +115,14 @@ const ProgressHistory: React.FC = () => {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+    // 幅と余白はメイン領域（App の Container）に合わせる
+    <Box>
       <Box sx={{ mb: 3 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/")} sx={{ mb: 2 }}>
-          ホームに戻る
-        </Button>
+        <PageBreadcrumbs items={[{ label: "学習履歴" }]} />
         <Paper elevation={0} sx={{ p: 3, backgroundColor: "#f5f5f5" }}>
-          <Typography variant="h4" component="h1" gutterBottom>
-            <span aria-hidden="true">📊</span> 学習履歴
+          <Typography variant="h4" component="h1" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1, fontSize: { xs: "1.625rem", sm: "2.125rem" } }}>
+            <BarChartIcon color="primary" fontSize="large" aria-hidden="true" />
+            学習履歴
           </Typography>
           <Typography variant="body1" color="text.secondary">
             あなたの学習進捗と成果を確認できます
@@ -183,6 +188,31 @@ const ProgressHistory: React.FC = () => {
             <Card elevation={2}>
               <CardContent>
                 <Typography variant="h6" component="h2" id="progress-table-title" gutterBottom>学習履歴一覧</Typography>
+                {compact ? (
+                  <Box component="ul" aria-labelledby="progress-table-title" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: 1.5 }}>
+                    {progress.map((item) => (
+                      <Box
+                        component="li"
+                        key={item.id ?? `local-${item.lesson}`}
+                        sx={{ border: 1, borderColor: "divider", borderRadius: 1, p: 1.5 }}
+                      >
+                        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 1 }}>
+                          <Typography variant="body1" component="p" sx={{ fontWeight: "bold", minWidth: 0, overflowWrap: "anywhere" }}>
+                            {item.lesson_title}
+                          </Typography>
+                          <Chip size="small" color="success" variant="outlined" icon={<CheckCircleIcon />} label="完了" sx={{ flexShrink: 0 }} />
+                        </Box>
+                        {item.scene_title && <Chip label={item.scene_title} size="small" color="primary" sx={{ mt: 1, maxWidth: "100%" }} />}
+                        <Box component="dl" sx={{ m: 0, mt: 1, display: "grid", gridTemplateColumns: "auto 1fr", columnGap: 1.5, rowGap: 0.5 }}>
+                          <Typography component="dt" variant="body2" color="text.secondary">完了日時</Typography>
+                          <Typography component="dd" variant="body2" sx={{ m: 0 }}>{formatDate(item.completed_at)}</Typography>
+                          <Typography component="dt" variant="body2" color="text.secondary">学習時間</Typography>
+                          <Typography component="dd" variant="body2" sx={{ m: 0 }}>{formatTime(item.time_spent)}</Typography>
+                        </Box>
+                      </Box>
+                    ))}
+                  </Box>
+                ) : (
                 <TableContainer>
                   <Table aria-labelledby="progress-table-title">
                     <TableHead>
@@ -209,12 +239,13 @@ const ProgressHistory: React.FC = () => {
                     </TableBody>
                   </Table>
                 </TableContainer>
+                )}
               </CardContent>
             </Card>
           )}
         </>
       )}
-    </Container>
+    </Box>
   );
 };
 

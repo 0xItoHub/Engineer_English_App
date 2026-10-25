@@ -6,16 +6,17 @@ const SiteFooter: React.FC = () => {
   const year = new Date().getFullYear();
   return (
     <Box component="footer" sx={{ mt: 8, borderTop: (theme) => `1px solid ${theme.palette.divider}`, bgcolor: 'background.paper' }}>
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      {/* スマートフォンでは右下のチャットボタンに重ならないよう、下側の余白を広げる */}
+      <Container maxWidth="lg" sx={{ pt: 4, pb: { xs: 11, sm: 4 } }}>
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           spacing={2}
           sx={{ justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' } }}
         >
-          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-            Engineer English Inc.
+          <Typography variant="subtitle1" component="p" sx={{ fontWeight: 600 }}>
+            Engineer English App（個人開発）
           </Typography>
-          <Stack component="nav" aria-label="フッターナビゲーション" direction="row" spacing={3}>
+          <Stack component="nav" aria-label="フッターナビゲーション" direction="row" sx={{ flexWrap: 'wrap', columnGap: 3, rowGap: 1 }}>
             <MuiLink component={RouterLink} to="/terms" underline="hover" color="inherit">
               利用規約
             </MuiLink>
@@ -28,8 +29,8 @@ const SiteFooter: React.FC = () => {
           </Stack>
         </Stack>
         <Divider sx={{ my: 2 }} />
-        <Typography variant="caption" color="text.secondary">
-          © {year} Engineer English Inc. All rights reserved.
+        <Typography variant="body2" color="text.secondary" sx={{ fontSize: 13 }}>
+          © {year} Engineer English App
         </Typography>
       </Container>
     </Box>

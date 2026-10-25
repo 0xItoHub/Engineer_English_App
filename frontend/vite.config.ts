@@ -10,8 +10,18 @@ export default defineConfig({
   build: {
     // デプロイ手順（S3 への同期）に合わせて build/ に出力する
     outDir: 'build',
-    // MUI を含む単一バンドル構成に合わせた上限値（ルート単位のコード分割は今後の改善で検討）
-    chunkSizeWarningLimit: 800,
+    rolldownOptions: {
+      output: {
+        // ライブラリは更新頻度が低いため、アプリのコードと分けてブラウザのキャッシュを長く使えるようにする
+        codeSplitting: {
+          groups: [
+            { name: 'vendor-react', test: /[\\/]node_modules[\\/](react|react-dom|scheduler|react-router)[\\/]/, priority: 30 },
+            { name: 'vendor-mui', test: /[\\/]node_modules[\\/](@mui[\\/](?!icons-material)[^\\/]+|@emotion|@popperjs|react-transition-group|stylis|@babel[\\/]runtime)[\\/]/, priority: 20 },
+            { name: 'vendor-oidc', test: /[\\/]node_modules[\\/](oidc-client-ts|react-oidc-context|jwt-decode)[\\/]/, priority: 10 },
+          ],
+        },
+      },
+    },
   },
   server: {
     port: 3000,

@@ -3,7 +3,7 @@ import { act, fireEvent, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import axios from 'axios';
 import ScenesList from './ScenesList';
-import { LOCAL_PROGRESS_KEY, pushLocalProgress } from './lib/storage';
+import { LAST_LESSON_KEY, LOCAL_PROGRESS_KEY, pushLocalProgress } from './lib/storage';
 import { renderWithClient } from './test/renderWithClient';
 import { onlineManager } from '@tanstack/react-query';
 
@@ -95,12 +95,32 @@ test('概要・技術スタックを表示し、「学習をはじめる」で�
 
   renderScenesList();
 
-  expect(await screen.findByRole('heading', { level: 2, name: 'エンジニアのための、実務に効く英語学習' })).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { level: 1, name: 'エンジニアのための、実務に効く英語学習' })).toBeInTheDocument();
   expect(screen.getByRole('heading', { level: 2, name: '技術スタック' })).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole('link', { name: '学習をはじめる' }));
   expect(scrollIntoView).toHaveBeenCalled();
   expect(document.getElementById('scene-list')).toHaveFocus();
+});
+
+test('カルーセルの画像は WebP を優先し、大きさの指定と遅延読み込みを行う', async () => {
+  mockedAxios.get.mockImplementation((url: string) =>
+    url.endsWith('/api/scenes/') ? Promise.resolve({ data: scenes }) : Promise.reject(new Error('403'))
+  );
+
+  const { container } = renderScenesList();
+  await screen.findByText('Daily Standup');
+
+  const images = Array.from(container.querySelectorAll('picture img'));
+  expect(images).toHaveLength(6);
+  expect(container.querySelector('picture source')).toHaveAttribute('type', 'image/webp');
+  expect(images[0]).toHaveAttribute('loading', 'eager');
+  for (const img of images) {
+    expect(img).toHaveAttribute('width', '1170');
+    expect(img).toHaveAttribute('height', '780');
+    expect(img).toHaveAttribute('decoding', 'async');
+  }
+  expect(images.slice(1).every((img) => img.getAttribute('loading') === 'lazy')).toBe(true);
 });
 
 test('「学習開始」でシーン詳細へ遷移する', async () => {
@@ -149,4 +169,23 @@ test('オフラインの場合は接続を確認する案内を表示する', as
   } finally {
     onlineManager.setOnline(true);
   }
+});
+
+test('最後に開いたレッスンを「続きから」として表示し、一覧に無いレッスンの記録は表示しない', async () => {
+  mockedAxios.get.mockImplementation((url: string) =>
+    url.endsWith('/api/scenes/') ? Promise.resolve({ data: scenes }) : Promise.reject(new Error('403'))
+  );
+  window.localStorage.setItem(LAST_LESSON_KEY, JSON.stringify({ lesson: 11, scene: 1 }));
+
+  const { unmount } = renderScenesList();
+
+  const section = await screen.findByRole('region', { name: '続きから' });
+  expect(within(section).getByText('L2')).toBeInTheDocument();
+  expect(within(section).getByRole('link', { name: 'L2 を続きから学習する' })).toHaveAttribute('href', '/lesson/11');
+  unmount();
+
+  window.localStorage.setItem(LAST_LESSON_KEY, JSON.stringify({ lesson: 99, scene: 1 }));
+  renderScenesList();
+  await screen.findByText('Daily Standup');
+  expect(screen.queryByRole('region', { name: '続きから' })).not.toBeInTheDocument();
 });

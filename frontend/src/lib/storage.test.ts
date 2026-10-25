@@ -3,6 +3,12 @@ import {
   getLocalProgressSnapshot,
   pushLocalProgress,
   readJSON,
+  readLastLesson,
+  writeLastLesson,
+  LAST_LESSON_KEY,
+  readSpeechRate,
+  SPEECH_RATE_KEY,
+  writeSpeechRate,
   readLocalProgress,
   removeLocalProgressEntry,
   subscribeLocalProgress,
@@ -89,4 +95,28 @@ test('保存内容が同じ間は同じ配列を返し、保存時と他のタ�
   unsubscribe();
   pushLocalProgress({ lesson: 2, score: 100, time_spent: 1 });
   expect(onChange).toHaveBeenCalledTimes(2);
+});
+
+test('読み上げ速度は選択肢に含まれる値だけを読み込み、それ以外は既定値を返す', () => {
+  const rates = [0.75, 1, 1.25, 1.5];
+  expect(readSpeechRate(rates, 1)).toBe(1);
+  expect(writeSpeechRate(1.25)).toBe(true);
+  expect(readSpeechRate(rates, 1)).toBe(1.25);
+  window.localStorage.setItem(SPEECH_RATE_KEY, '3');
+  expect(readSpeechRate(rates, 1)).toBe(1);
+  window.localStorage.setItem(SPEECH_RATE_KEY, '"fast"');
+  expect(readSpeechRate(rates, 1)).toBe(1);
+  window.localStorage.setItem(SPEECH_RATE_KEY, '{oops');
+  expect(readSpeechRate(rates, 1)).toBe(1);
+});
+
+test('最後に開いたレッスンは形式の正しい値だけを読み込む', () => {
+  expect(readLastLesson()).toBeNull();
+  expect(writeLastLesson({ lesson: 5, scene: 1 })).toBe(true);
+  expect(readLastLesson()).toEqual({ lesson: 5, scene: 1 });
+  window.localStorage.setItem(LAST_LESSON_KEY, JSON.stringify({ lesson: 'x', scene: 1 }));
+  expect(readLastLesson()).toBeNull();
+  window.localStorage.setItem(LAST_LESSON_KEY, '{oops');
+  expect(readLastLesson()).toBeNull();
+  expect(writeLastLesson({ lesson: 0, scene: 1 })).toBe(false);
 });

@@ -12,20 +12,22 @@ import {
   List,
   ListItem,
   ListItemText,
-  Container
 } from "@mui/material";
 import { 
   PlayArrow as PlayIcon,
-  ArrowBack as ArrowBackIcon,
   School as SchoolIcon,
-  CheckCircle as CheckCircleIcon
+  CheckCircle as CheckCircleIcon,
+  Replay as ReplayIcon,
+  MenuBook as MenuBookIcon
 } from "@mui/icons-material";
+import { lessonDescription } from "./lib/labels";
 import { useSceneQuery } from "./lib/queries";
 import { parseId } from "./lib/params";
 import { isNotFoundError, queryView } from "./lib/queryState";
 import { useLearningProgress } from "./hooks/useLearningProgress";
 import { usePageTitle } from "./hooks/usePageTitle";
 import NotFound from "./components/NotFound";
+import PageBreadcrumbs from "./components/PageBreadcrumbs";
 import { LoadingView, ProgressErrorAlert, QueryErrorAlert } from "./components/QueryStatus";
 
 const PAGE_SIZE = 5;
@@ -85,15 +87,15 @@ const SceneDetail: React.FC = () => {
   const paginated = lessons.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+    // 幅と余白はメイン領域（App の Container）に合わせる
+    <Box>
       {/* ヘッダー */}
       <Box sx={{ mb: 3 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/")} sx={{ mb: 2 }}>
-          ホームに戻る
-        </Button>
+        <PageBreadcrumbs items={[{ label: scene.title }]} />
         <Paper elevation={0} sx={{ p: 3, backgroundColor: "#f5f5f5" }}>
-          <Typography variant="h4" component="h1" gutterBottom>
-            <span aria-hidden="true">📚</span> {scene.title}
+          <Typography variant="h4" component="h1" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1, fontSize: { xs: "1.625rem", sm: "2.125rem" } }}>
+            <MenuBookIcon color="primary" fontSize="large" aria-hidden="true" />
+            {scene.title}
           </Typography>
         </Paper>
       </Box>
@@ -119,14 +121,15 @@ const SceneDetail: React.FC = () => {
                     const completed = completedLessonIds.has(lesson.id);
                     return (
                       <ListItem key={lesson.id} divider secondaryAction={
+                        // 完了したレッスンは「復習する」として案内する
                         <Button
                           variant="outlined"
-                          size="small"
-                          startIcon={<PlayIcon />}
+                          startIcon={completed ? <ReplayIcon /> : <PlayIcon />}
                           onClick={() => handleStartLesson(lesson.id)}
-                          aria-label={`${lesson.title} を開始`}
+                          aria-label={`${lesson.title} を${completed ? "復習する" : "開始"}`}
+                          sx={{ minHeight: 44, whiteSpace: 'nowrap' }}
                         >
-                          開始
+                          {completed ? "復習する" : "開始"}
                         </Button>
                       }>
                         <ListItemText
@@ -141,9 +144,9 @@ const SceneDetail: React.FC = () => {
                               ) : (
                                 <Chip size="small" variant="outlined" label="未学習" aria-label={`${lesson.title}: 未学習`} />
                               )}
-                              {lesson.description && (
-                                <Typography variant="caption" color="text.secondary">
-                                  {lesson.description}
+                              {lessonDescription(lesson.description, lesson.title) && (
+                                <Typography variant="body2" color="text.secondary">
+                                  {lessonDescription(lesson.description, lesson.title)}
                                 </Typography>
                               )}
                             </Box>
@@ -173,7 +176,7 @@ const SceneDetail: React.FC = () => {
           </CardContent>
         </Card>
       </Box>
-    </Container>
+    </Box>
   );
 };
 

@@ -45,7 +45,7 @@ const AuthControls: React.FC<{ onError?: (message: string) => void }> = ({ onErr
         startIcon={<LoginIcon aria-hidden="true" />}
         onClick={handleLogin}
         disabled={busy}
-        sx={{ flexShrink: 0, borderColor: "rgba(255,255,255,0.5)", "&:hover": { borderColor: "#fff" } }}
+        sx={{ flexShrink: 0, minHeight: 44, whiteSpace: "nowrap", borderColor: "rgba(255,255,255,0.5)", "&:hover": { borderColor: "#fff" } }}
       >
         ログイン
       </Button>
@@ -75,7 +75,7 @@ const AuthControls: React.FC<{ onError?: (message: string) => void }> = ({ onErr
         startIcon={<LogoutIcon aria-hidden="true" />}
         onClick={handleLogout}
         disabled={busy}
-        sx={{ flexShrink: 0 }}
+        sx={{ flexShrink: 0, minHeight: 44, whiteSpace: "nowrap" }}
       >
         ログアウト
       </Button>

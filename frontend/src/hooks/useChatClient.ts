@@ -13,14 +13,13 @@ export interface ChatClient {
   send(messages: ChatMessage[], options?: SendOptions): Promise<ChatMessage>;
 }
 
-// ダミークライアント（UI確認用）
+// デモ用のクライアント（入力内容をそのまま返す。AI による回答は今後対応予定）
 export function createDummyClient(): ChatClient {
   return {
     async send(messages) {
       const last = messages[messages.length - 1];
       const reply = last?.content || '';
-      // それっぽいレスポンスを返す
-      const content = `You said: "${reply}"\n\n(この返信はダミーです。後でAPIに置き換え予定)`;
+      const content = `You said: "${reply}"\n\n（デモ: 入力内容をそのまま返しています）`;
       await new Promise((r) => setTimeout(r, 500));
       return {
         id: Math.random().toString(36).slice(2),

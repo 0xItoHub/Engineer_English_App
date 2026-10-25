@@ -55,14 +55,15 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 
-test('ログイン中はアカウントに保存できたらブラウザの進捗を削除し、履歴画面へ進む', async () => {
+test('ログイン中はアカウントに保存できたらブラウザの進捗を削除し、完了後の案内から学習履歴へ進める', async () => {
   mockLessonApi();
   mockedAxios.post.mockResolvedValue({ data: { id: 1, lesson: 5, score: 100, time_spent: 0 } });
 
   await completeLesson();
 
   expect(readLocalProgress()).toEqual([]);
-  expect(await screen.findByText('progress page', {}, { timeout: 3000 })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('link', { name: '学習履歴を見る' }));
+  expect(screen.getByText('progress page')).toBeInTheDocument();
 });
 
 test('ログイン中でもアカウントに保存できなかった場合は本人の記録としてブラウザに残し、再送を案内する', async () => {

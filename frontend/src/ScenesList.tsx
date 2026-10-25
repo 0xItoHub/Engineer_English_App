@@ -15,28 +15,31 @@ import { keyframes } from "@mui/material/styles";
 import { 
   PlayArrow as PlayIcon,
   Book as BookIcon,
-  Chat as ChatIcon,
-  TrendingUp as TrendingUpIcon
+  Chat as ChatIcon
 } from "@mui/icons-material";
 import AnimatedCodeBackground from "./components/AnimatedCodeBackground";
 import HomeHero from "./components/HomeHero";
 import ContentStats from "./components/ContentStats";
 import TechStack from "./components/TechStack";
+import ContinueLearning from "./components/ContinueLearning";
 import { countContent, useScenesQuery, type Scene } from "./lib/queries";
 import { queryView } from "./lib/queryState";
 import { useLearningProgress } from "./hooks/useLearningProgress";
 import { usePageTitle } from "./hooks/usePageTitle";
 import { LoadingView, ProgressErrorAlert, QueryErrorAlert } from "./components/QueryStatus";
+import { DISPLAY_FONT_FAMILY } from "./theme";
 
-// カルーセル用画像（public/images/ 配下に配置してください）
-const heroImages = [
-  "/images/engineer_01.jpeg",
-  "/images/engineer_02.jpeg",
-  "/images/engineer_03.jpeg",
-];
+// カルーセル用画像（public/images/ 配下。WebP に対応したブラウザでは WebP、それ以外では JPEG を表示する）
+const heroImages = ["/images/engineer_01", "/images/engineer_02", "/images/engineer_03"];
+// 画像の元の大きさ（表示前に縦横比を確保して、読み込み時のレイアウトのずれを防ぐ）
+const HERO_IMAGE_WIDTH = 1170;
+const HERO_IMAGE_HEIGHT = 780;
 
 // シーン一覧の要素 ID（「学習をはじめる」の移動先）
 const SCENE_LIST_ID = "scene-list";
+
+// カルーセルの高さ（スマートフォンでは低くして、シーン一覧まで早く届くようにする）
+const CAROUSEL_HEIGHT = { xs: 120, sm: 220 };
 
 // 無限スライドアニメーション
 const slide = keyframes`
@@ -79,37 +82,31 @@ const ScenesList: React.FC = () => {
 
       {/* コンテンツは前面 */}
       <Box sx={{ position: 'relative', zIndex: 1 }}>
-        {/* タイトルセクション */}
-        <Paper elevation={0} sx={{ p: 3, mb: 4, backgroundColor: "#f5f5f5", opacity: 0.98 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Box>
-              <Typography
-                variant="h6"
-                component="h1"
-                gutterBottom
-                sx={{ fontFamily: 'Cormorant Garamond, Playfair Display, serif', fontWeight: 400, letterSpacing: 1.2, lineHeight: 1.1 }}
-              >
-                コードは世界を跨ぐ
-                <Typography
-                  component="span"
-                  variant="subtitle1"
-                  sx={{ ml: 2, fontFamily: 'Cormorant Garamond, Playfair Display, serif', fontStyle: 'italic', fontWeight: 600, color: 'text.secondary' }}
-                >
-                  ~ Code crosses borders ~
-                </Typography>
-              </Typography>
-            </Box>
-            <Button
-              variant="outlined"
-              onClick={() => navigate("/progress")}
-              startIcon={<TrendingUpIcon />}
+        {/* アプリの概要と学習開始への導線（スマートフォンでも最初に表示する） */}
+        <HomeHero targetId={SCENE_LIST_ID} />
+
+        {/* 最後に開いたレッスンへの導線 */}
+        {scenes.length > 0 && <ContinueLearning scenes={scenes} />}
+
+        {/* キャッチコピーとイメージ画像 */}
+        <Paper elevation={0} sx={{ p: { xs: 2, sm: 3 }, mb: 4, backgroundColor: "#f5f5f5", opacity: 0.98 }}>
+          <Typography
+            variant="h6"
+            component="p"
+            sx={{ mb: 2, fontFamily: DISPLAY_FONT_FAMILY, fontWeight: 400, letterSpacing: 1.2, lineHeight: 1.1 }}
+          >
+            コードは世界を跨ぐ
+            <Typography
+              component="span"
+              variant="subtitle1"
+              sx={{ ml: 2, fontFamily: DISPLAY_FONT_FAMILY, fontStyle: 'italic', fontWeight: 600, color: 'text.secondary' }}
             >
-              学習履歴
-            </Button>
-          </Box>
+              ~ Code crosses borders ~
+            </Typography>
+          </Typography>
 
           {/* ヒーローカルーセル（装飾画像のため支援技術からは隠す） */}
-          <Box aria-hidden="true" sx={{ position: 'relative', height: 220, borderRadius: 0, overflow: 'hidden' }}>
+          <Box aria-hidden="true" sx={{ position: 'relative', height: CAROUSEL_HEIGHT, borderRadius: 0, overflow: 'hidden' }}>
             <Box
               sx={{
                 display: 'flex',
@@ -119,21 +116,29 @@ const ScenesList: React.FC = () => {
                 '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
               }}
             >
-              {[...heroImages, ...heroImages].map((src, idx) => (
+              {[...heroImages, ...heroImages].map((base, idx) => (
                 <Box
                   key={idx}
-                  component="img"
-                  src={src}
-                  alt=""
-                  sx={{ width: `${100 / (heroImages.length * 2)}%`, height: '220px', objectFit: 'cover' }}
-                />
+                  component="picture"
+                  sx={{ display: 'block', flex: 'none', width: `${100 / (heroImages.length * 2)}%`, height: CAROUSEL_HEIGHT }}
+                >
+                  <source srcSet={`${base}.webp`} type="image/webp" />
+                  <Box
+                    component="img"
+                    src={`${base}.jpeg`}
+                    alt=""
+                    width={HERO_IMAGE_WIDTH}
+                    height={HERO_IMAGE_HEIGHT}
+                    // 最初に表示される画像以外は、表示位置に近づいてから読み込む
+                    loading={idx === 0 ? "eager" : "lazy"}
+                    decoding="async"
+                    sx={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                </Box>
               ))}
             </Box>
           </Box>
         </Paper>
-
-        {/* アプリの概要と学習開始への導線 */}
-        <HomeHero targetId={SCENE_LIST_ID} />
 
         {/* 収録コンテンツの数（シーン一覧から集計） */}
         {scenes.length > 0 && <ContentStats stats={countContent(scenes)} />}
@@ -174,8 +179,8 @@ const ScenesList: React.FC = () => {
                         {/* 進捗バー */}
                         <Box sx={{ mt: 1, mb: 2 }}>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                            <Typography variant="caption" color="text.secondary">進捗</Typography>
-                            <Typography variant="caption" color="text.secondary">{percent}% ({done}/{total})</Typography>
+                            <Typography variant="body2" color="text.secondary">進捗</Typography>
+                            <Typography variant="body2" color="text.secondary">{percent}% ({done}/{total})</Typography>
                           </Box>
                           <LinearProgress
                             variant="determinate"
@@ -195,13 +200,13 @@ const ScenesList: React.FC = () => {
 
                       <CardActions>
                         <Button
-                          size="small"
                           startIcon={<PlayIcon />}
                           variant="contained"
                           fullWidth
                           onClick={() => handleStartLearning(scene.id)}
                           aria-label={`${scene.title} の学習を開始`}
                           sx={{
+                            minHeight: 44,
                             bgcolor: 'primary.light',
                             color: 'primary.contrastText',
                             '&:hover': { bgcolor: 'primary.main' },

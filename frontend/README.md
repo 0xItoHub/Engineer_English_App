@@ -94,11 +94,13 @@ Cognito のアプリクライアントには、コールバック URL `https://<
 
 ```
 src/
-├─ App.tsx                 # ルーティング・テーマ・共通レイアウト
+├─ App.tsx                 # ルーティング（ホーム以外は表示時に読み込み）・共通レイアウト
+├─ theme.ts                # MUI テーマ・フォントの指定
 ├─ ScenesList.tsx          # ホーム（概要・収録コンテンツ数・シーン一覧・技術スタック）
 ├─ SceneDetail.tsx         # シーン詳細（レッスン一覧）
 ├─ LessonDetail.tsx        # レッスン（フレーズ・対話・読み上げ）
 ├─ ProgressHistory.tsx     # 学習履歴
+├─ pages/                  # プライバシーポリシー・利用規約・お問い合わせ
 ├─ components/             # 背景アニメーション・ホーム画面の各セクション・チャット・フッター・ErrorBoundary・ログイン関連
 ├─ hooks/                  # チャットクライアント・prefers-reduced-motion
 ├─ lib/                    # API 接続先の設定・データ取得（queries.ts）・HTTP エラー処理・localStorage ヘルパー・ログイン（auth.ts / authHttp.ts / progressSync.ts）
@@ -122,6 +124,17 @@ API の取得処理は TanStack Query で管理し、クエリキーとクエリ
 - API の 4xx / 5xx は axios のインターセプターで一元的に処理し、画面にはユーザー向けのメッセージを表示します。
 - OS の「視差効果を減らす」設定（`prefers-reduced-motion`）に合わせて背景アニメーションを停止します。
 - 音声読み上げ（Web Speech API）に対応していないブラウザでは、読み上げボタンを無効化して案内を表示します。
+- 読み上げ速度（既定は 1 倍）はブラウザに記憶し、読み上げ中であることを `aria-live` で伝えます。
+- レッスンのステップを切り替えると、そのステップの見出しへフォーカスを移します。
+
+## 画像
+
+ホームのカルーセル画像は `public/images/` に WebP（`*.webp`）と JPEG（`*.jpeg`、WebP 非対応のブラウザ向け）の両方を置き、`<picture>` で出し分けています。
+画像を差し替える場合は、ローカルの変換ツール（例: Homebrew の `cwebp`）で WebP を作成します。
+
+```bash
+cwebp -q 75 -m 6 -metadata none engineer_01.png -o public/images/engineer_01.webp
+```
 
 ## ビルドとデプロイ
 
@@ -130,6 +143,30 @@ npm run build
 ```
 
 `build/` の内容を S3 にアップロードし、CloudFront から配信します。
+ファイルの種類ごとにキャッシュ期間を指定してアップロードします（GitHub Actions の `deploy.yml` も同じ手順です）。
+
+| 対象 | Cache-Control |
+|---|---|
+| `assets/*`（ファイル名にハッシュを含む JS / CSS） | `public, max-age=31536000, immutable` |
+| `images/*`・その他の静的ファイル | `public, max-age=86400` |
+| `index.html` | `no-cache`（毎回更新を確認） |
+
+手動でアップロードする場合は、次の順に実行します（`index.html` は新しいアセットのアップロード後に置き換えます）。
+
+```bash
+aws s3 sync build/assets "s3://${FRONTEND_BUCKET}/assets" --delete \
+  --cache-control "public, max-age=31536000, immutable"
+aws s3 sync build/images "s3://${FRONTEND_BUCKET}/images" --delete \
+  --cache-control "public, max-age=86400"
+aws s3 sync build/ "s3://${FRONTEND_BUCKET}" --delete \
+  --exclude "assets/*" --exclude "images/*" --exclude "index.html" \
+  --cache-control "public, max-age=86400"
+aws s3 cp build/index.html "s3://${FRONTEND_BUCKET}/index.html" \
+  --cache-control "no-cache" --content-type "text/html; charset=utf-8"
+```
+
+アップロード後は CloudFront のキャッシュを無効化（`/*`）します。
+
 API は同一オリジンの `/api/...` で呼び出すため、通常は `VITE_API_BASE_URL` を指定せずにビルドします。
 
 ビルド結果をローカルで確認する場合は、バックエンドを `http://127.0.0.1:8000` で起動したうえで `npm run preview` を実行します（`/api` は開発サーバーと同じくバックエンドへ中継されます）。

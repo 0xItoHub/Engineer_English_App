@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { useParams, useNavigate } from "react-router";
+import { useParams, Link as RouterLink } from "react-router";
 import {
   Card,
   CardContent,
@@ -12,13 +12,13 @@ import {
   Step,
   StepLabel,
   LinearProgress,
-  Container,
   Chip,
   Snackbar,
   IconButton,
   Tooltip,
   ToggleButton,
-  ToggleButtonGroup
+  ToggleButtonGroup,
+  Stack
 } from "@mui/material";
 import { 
   ArrowBack as ArrowBackIcon,
@@ -26,33 +26,45 @@ import {
   Book as BookIcon,
   Chat as ChatIcon,
   VolumeUp as VolumeUpIcon,
-  StopCircle as StopCircleIcon
+  StopCircle as StopCircleIcon,
+  ArrowForward as ArrowForwardIcon,
+  TrendingUp as TrendingUpIcon,
+  MenuBook as MenuBookIcon,
+  Flag as FlagIcon,
+  AutoStories as AutoStoriesIcon,
+  Forum as ForumIcon,
+  EmojiEvents as EmojiEventsIcon
 } from "@mui/icons-material";
 import { parseId } from "./lib/params";
 import { isNotFoundError, queryView } from "./lib/queryState";
 import { usePageTitle } from "./hooks/usePageTitle";
 import NotFound from "./components/NotFound";
+import PageBreadcrumbs from "./components/PageBreadcrumbs";
 import { LoadingView, QueryErrorAlert } from "./components/QueryStatus";
-import { pushLocalProgress, removeLocalProgressEntry } from "./lib/storage";
+import { pushLocalProgress, readSpeechRate, removeLocalProgressEntry, writeLastLesson, writeSpeechRate } from "./lib/storage";
+import { visuallyHidden } from "./lib/a11y";
 import { useAppAuth } from "./lib/auth";
 import { pickEnglishVoice, utteranceLang } from "./lib/tts";
+import { findNextTarget } from "./lib/lessonNavigation";
+import { DEFAULT_LESSON_DESCRIPTION, lessonDescription, phraseNote, speakerLabel } from "./lib/labels";
 import {
   useCompleteLessonMutation,
   useLessonQuery,
+  useScenesQuery,
   type Dialogue,
   type Phrase,
 } from "./lib/queries";
 
 // 読み上げ速度の選択肢
 const SPEECH_RATES = [0.75, 1, 1.25, 1.5];
-const DEFAULT_SPEECH_RATE = 1.5;
+const DEFAULT_SPEECH_RATE = 1;
 
 // 完了時にサーバへ送るスコア（API との互換性のため、完了は常に 100 として記録する）
 const COMPLETED_SCORE = 100;
 
-// 完了の通知を表示してから学習履歴へ移動するまでの時間
-const NAVIGATE_DELAY_MS = 1200;
-const NAVIGATE_DELAY_WARNING_MS = 3000;
+// 完了の通知を表示する時間
+const NOTICE_DURATION_MS = 4000;
+const NOTICE_DURATION_WARNING_MS = 6000;
 
 type CompletionNotice = { severity: "success" | "warning"; message: string };
 const SUCCESS_NOTICE: CompletionNotice = { severity: "success", message: "レッスンを完了しました！" };
@@ -71,14 +83,21 @@ function isSpeechSynthesisSupported(): boolean {
   );
 }
 
+// レッスンごとに学習の状態（ステップ・完了・学習時間）を新しくする
+// 「次のレッスンへ」で同じ画面のまま別のレッスンへ移動した場合も、最初のステップから始める
 const LessonDetail: React.FC = () => {
   const { lessonId } = useParams<{ lessonId: string }>();
-  const navigate = useNavigate();
+  return <LessonContent key={lessonId ?? ""} lessonId={lessonId} />;
+};
+
+const LessonContent: React.FC<{ lessonId: string | undefined }> = ({ lessonId }) => {
   const { isAuthenticated, sub } = useAppAuth();
   // ID の形式が正しくない場合は取得せず「見つかりません」を表示する
   const lessonNumber = parseId(lessonId);
   const lessonQuery = useLessonQuery(lessonNumber ?? undefined);
   const completeLesson = useCompleteLessonMutation();
+  // 次のレッスン・シーンの案内に使う（ホームと同じキャッシュを共有する）
+  const scenesQuery = useScenesQuery({ enabled: lessonNumber !== null });
   const [currentStep, setCurrentStep] = useState(0);
   // 「レッスン完了」を押した後は true（画面を離れるまで再送信しない）
   const [finished, setFinished] = useState(false);
@@ -91,8 +110,12 @@ const LessonDetail: React.FC = () => {
   const [speakingId, setSpeakingId] = useState<number | null>(null);
   const [speakingDialogueId, setSpeakingDialogueId] = useState<number | null>(null);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-  // 読み上げ速度（既定はネイティブ並みの 1.5 倍）
-  const [speechRate, setSpeechRate] = useState<number>(DEFAULT_SPEECH_RATE);
+  // 読み上げ速度（既定は標準の 1 倍。前回選んだ速度をブラウザに記憶する）
+  const [speechRate, setSpeechRate] = useState<number>(() => readSpeechRate(SPEECH_RATES, DEFAULT_SPEECH_RATE));
+  const changeSpeechRate = (rate: number) => {
+    setSpeechRate(rate);
+    writeSpeechRate(rate);
+  };
   const ttsSupported = isSpeechSynthesisSupported();
 
   useEffect(() => {
@@ -172,7 +195,7 @@ const LessonDetail: React.FC = () => {
       return (
         <Tooltip title="お使いのブラウザは音声読み上げに対応していません">
           <span>
-            <IconButton color="primary" disabled aria-label={`${label}（音声読み上げ非対応）`}>
+            <IconButton size="large" color="primary" disabled aria-label={`${label}（音声読み上げ非対応）`}>
               <VolumeUpIcon />
             </IconButton>
           </span>
@@ -181,13 +204,13 @@ const LessonDetail: React.FC = () => {
     }
     return speaking ? (
       <Tooltip title="停止">
-        <IconButton color="error" onClick={stopSpeaking} aria-label={`${label} の読み上げを停止`}>
+        <IconButton size="large" color="error" onClick={stopSpeaking} aria-label={`${label} の読み上げを停止`}>
           <StopCircleIcon />
         </IconButton>
       </Tooltip>
     ) : (
       <Tooltip title="英語で読み上げ">
-        <IconButton color="primary" onClick={onSpeak} aria-label={`${label} を英語で読み上げ`}>
+        <IconButton size="large" color="primary" onClick={onSpeak} aria-label={`${label} を英語で読み上げ`}>
           <VolumeUpIcon />
         </IconButton>
       </Tooltip>
@@ -202,8 +225,9 @@ const LessonDetail: React.FC = () => {
         size="small"
         exclusive
         value={speechRate}
-        onChange={(_e, v: number | null) => { if (v != null) setSpeechRate(v); }}
+        onChange={(_e, v: number | null) => { if (v != null) changeSpeechRate(v); }}
         aria-labelledby="speech-rate-label"
+        sx={{ '& .MuiToggleButton-root': { minHeight: 44, minWidth: 44 } }}
       >
         {SPEECH_RATES.map((r) => (
           <ToggleButton key={r} value={r} aria-label={`${r} 倍速`}>{r}x</ToggleButton>
@@ -218,14 +242,6 @@ const LessonDetail: React.FC = () => {
     setStartTime(new Date());
   }, [lessonId]);
 
-  // 完了後の画面遷移タイマー（アンマウント時に解除）
-  const navigateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    return () => {
-      if (navigateTimerRef.current) clearTimeout(navigateTimerRef.current);
-    };
-  }, []);
-
   const steps = [
     "レッスン概要",
     "フレーズ学習",
@@ -235,12 +251,29 @@ const LessonDetail: React.FC = () => {
 
   const lastStep = steps.length - 1;
 
+  // ステップを切り替えたら、そのステップの見出しへフォーカスを移す（最初の表示では移さない）
+  const stepHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const completionHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const stepChangedRef = useRef(false);
+  useEffect(() => {
+    if (!stepChangedRef.current) return;
+    stepHeadingRef.current?.focus({ preventScroll: false });
+  }, [currentStep]);
+  useEffect(() => {
+    if (finished) completionHeadingRef.current?.focus();
+  }, [finished]);
+
+  const goToStep = (step: number) => {
+    stepChangedRef.current = true;
+    setCurrentStep(step);
+  };
+
   const handleNext = () => {
-    if (currentStep < lastStep) setCurrentStep(currentStep + 1);
+    if (currentStep < lastStep) goToStep(currentStep + 1);
   };
 
   const handleBack = () => {
-    if (currentStep > 0) setCurrentStep(currentStep - 1);
+    if (currentStep > 0) goToStep(currentStep - 1);
   };
 
   const handleComplete = () => {
@@ -260,20 +293,16 @@ const LessonDetail: React.FC = () => {
       completed_at: new Date().toISOString(),
     };
     pushLocalProgress(entry);
-    const finish = (next: CompletionNotice, delay: number) => {
-      setNotice(next);
-      navigateTimerRef.current = setTimeout(() => navigate("/progress"), delay);
-    };
     completeLesson.mutate(
       { lessonId: String(lessonNumber), score: COMPLETED_SCORE, timeSpent },
       {
         onSuccess: () => {
           if (owner) removeLocalProgressEntry(entry);
-          finish(SUCCESS_NOTICE, NAVIGATE_DELAY_MS);
+          setNotice(SUCCESS_NOTICE);
         },
         onError: () => {
           // 未ログイン時はブラウザへの保存で完了とし、ログイン中は次回ログイン時の再送を案内する
-          finish(owner ? PENDING_NOTICE : SUCCESS_NOTICE, owner ? NAVIGATE_DELAY_WARNING_MS : NAVIGATE_DELAY_MS);
+          setNotice(owner ? PENDING_NOTICE : SUCCESS_NOTICE);
         },
       }
     );
@@ -283,6 +312,14 @@ const LessonDetail: React.FC = () => {
   const saving = completeLesson.isPending;
   const view = queryView(lessonQuery);
   usePageTitle(lesson?.title);
+
+  // ホームの「続きから」に表示するため、開いたレッスンをブラウザに記憶する
+  const lessonIdForResume = lesson?.id;
+  const sceneIdForResume = lesson?.scene;
+  useEffect(() => {
+    if (lessonIdForResume === undefined || sceneIdForResume === undefined) return;
+    writeLastLesson({ lesson: lessonIdForResume, scene: sceneIdForResume });
+  }, [lessonIdForResume, sceneIdForResume]);
 
   if (lessonNumber === null || (view === "error" && isNotFoundError(lessonQuery.error))) {
     return <NotFound />;
@@ -310,20 +347,35 @@ const LessonDetail: React.FC = () => {
   // 進捗は現在のステップの位置から求める（戻る・進むを繰り返しても 100% を超えない）
   const progress = Math.min(100, Math.max(0, (currentStep / lastStep) * 100));
   const backPath = Number.isSafeInteger(lesson.scene) && lesson.scene > 0 ? `/scene/${lesson.scene}` : "/";
+  const nextTarget = findNextTarget(scenesQuery.data, lesson.scene, lesson.id);
+  // パンくずリストのシーン名（シーン一覧を取得できない場合は「シーン」と表示する）
+  const sceneTitle = scenesQuery.data?.find((s) => s.id === lesson.scene)?.title ?? "シーン";
+  const phrases = lesson.lesson_phrases ?? [];
+  const dialogues = lesson.lesson_dialogues ?? [];
+  // ステップの見出し（切り替え時にフォーカスを移す）
+  const stepHeadingProps = {
+    ref: stepHeadingRef,
+    tabIndex: -1,
+    variant: "h6",
+    component: "h2",
+    gutterBottom: true,
+    sx: { outline: "none", display: "flex", alignItems: "center", gap: 1 },
+  } as const;
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+    // 幅と余白はメイン領域（App の Container）に合わせる
+    <Box>
       {/* ヘッダー */}
       <Box sx={{ mb: 3 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(backPath)} sx={{ mb: 2 }}>
-          シーンに戻る
-        </Button>
+        <PageBreadcrumbs items={[{ label: sceneTitle, to: backPath }, { label: lesson.title }]} />
         <Paper elevation={0} sx={{ p: 3, backgroundColor: "#f5f5f5" }}>
-          <Typography variant="h4" component="h1" gutterBottom>
-            <span aria-hidden="true">📚</span> {lesson.title}
+          <Typography variant="h4" component="h1" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1, fontSize: { xs: "1.625rem", sm: "2.125rem" } }}>
+            <MenuBookIcon color="primary" fontSize="large" aria-hidden="true" />
+            {lesson.title}
           </Typography>
+          {/* タイトルを繰り返すだけの説明の代わりに、レッスンの進め方を案内する */}
           <Typography variant="body1" color="text.secondary">
-            {lesson.description}
+            {lessonDescription(lesson.description, lesson.title) ?? DEFAULT_LESSON_DESCRIPTION}
           </Typography>
         </Paper>
       </Box>
@@ -339,6 +391,10 @@ const LessonDetail: React.FC = () => {
           </Typography>
         </Box>
         <LinearProgress variant="determinate" value={progress} aria-label="レッスンの進捗" sx={{ height: 8, borderRadius: 4 }} />
+        {/* ステップの切り替えを支援技術に伝える */}
+        <Box aria-live="polite" sx={visuallyHidden}>
+          {`ステップ ${currentStep + 1} / ${steps.length}: ${steps[currentStep]}`}
+        </Box>
       </Box>
 
       {/* ステッパー */}
@@ -357,8 +413,9 @@ const LessonDetail: React.FC = () => {
         <CardContent>
           {currentStep === 0 && (
             <Box>
-              <Typography variant="h6" component="h2" gutterBottom>
-                <span aria-hidden="true">🎯</span> レッスン概要
+              <Typography {...stepHeadingProps}>
+                <FlagIcon color="primary" aria-hidden="true" />
+                レッスン概要
               </Typography>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -375,7 +432,7 @@ const LessonDetail: React.FC = () => {
 
           {currentStep === 1 && (
             <Box>
-              <Typography variant="h6" component="h2" gutterBottom><span aria-hidden="true">📖</span> フレーズ学習</Typography>
+              <Typography {...stepHeadingProps}><AutoStoriesIcon color="primary" aria-hidden="true" />フレーズ学習</Typography>
               {lesson.lesson_phrases && lesson.lesson_phrases.length > 0 && speechRateControl}
               {lesson.lesson_phrases && lesson.lesson_phrases.length > 0 ? (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -386,7 +443,7 @@ const LessonDetail: React.FC = () => {
                           <Box>
                             <Typography variant="h6" component="p" lang="en" gutterBottom>{p.text_en}</Typography>
                             <Typography variant="body1" color="text.secondary" gutterBottom>{p.text_ja}</Typography>
-                            {p.note && (<Typography variant="caption" color="text.secondary">メモ: {p.note}</Typography>)}
+                            {phraseNote(p.note) && (<Typography variant="body2" color="text.secondary">メモ: {phraseNote(p.note)}</Typography>)}
                           </Box>
                           <Box>
                             {renderSpeakButton(p.text_en, speakingId === p.id, () => speak(p))}
@@ -404,7 +461,7 @@ const LessonDetail: React.FC = () => {
 
           {currentStep === 2 && (
             <Box>
-              <Typography variant="h6" component="h2" gutterBottom><span aria-hidden="true">💬</span> 対話練習</Typography>
+              <Typography {...stepHeadingProps}><ForumIcon color="primary" aria-hidden="true" />対話練習</Typography>
               {lesson.lesson_dialogues && lesson.lesson_dialogues.length > 0 && speechRateControl}
               {lesson.lesson_dialogues && lesson.lesson_dialogues.length > 0 ? (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -412,8 +469,28 @@ const LessonDetail: React.FC = () => {
                     <Card key={d.id} variant="outlined">
                       <CardContent>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                          <Chip label={d.speaker} size="small" color="primary" />
-                          <Typography variant="body2" color="text.secondary">順序: {d.order}</Typography>
+                          {/* 発言の順番（番号のバッジ） */}
+                          <Box
+                            component="span"
+                            aria-hidden="true"
+                            sx={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              minWidth: 24,
+                              height: 24,
+                              px: 0.5,
+                              borderRadius: 12,
+                              bgcolor: 'grey.200',
+                              color: 'text.secondary',
+                              fontSize: 13,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {d.order}
+                          </Box>
+                          <Box component="span" sx={visuallyHidden}>{d.order} 番目の発言</Box>
+                          <Chip label={speakerLabel(d.speaker)} size="small" color="primary" />
                         </Box>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
                           <Typography variant="h6" component="p" lang="en" gutterBottom sx={{ mb: 0 }}>{d.line_en}</Typography>
@@ -434,33 +511,115 @@ const LessonDetail: React.FC = () => {
 
           {currentStep === 3 && (
             <Box>
-              <Typography variant="h6" component="h2" gutterBottom><span aria-hidden="true">🎉</span> まとめ</Typography>
-              <Typography variant="body1" sx={{ mb: 2 }}>お疲れさまでした！このレッスンは完了です。</Typography>
+              <Typography {...stepHeadingProps}><EmojiEventsIcon color="primary" aria-hidden="true" />まとめ</Typography>
+              <Typography variant="body1" sx={{ mb: 2 }}>
+                {finished
+                  ? "このレッスンで学んだ表現です。読み上げを聞いて、いつでも振り返れます。"
+                  : "このレッスンで学んだ表現を振り返りましょう。「レッスン完了」を押すと学習履歴に記録されます。"}
+              </Typography>
+              {(phrases.length > 0 || dialogues.length > 0) && speechRateControl}
+              {phrases.length > 0 && (
+                <Box component="section" aria-labelledby="recap-phrases-title" sx={{ mb: 2 }}>
+                  <Typography id="recap-phrases-title" variant="subtitle1" component="h3" sx={{ fontWeight: 600, mb: 1 }}>
+                    フレーズ
+                  </Typography>
+                  <Box component="ul" sx={{ listStyle: "none", m: 0, p: 0 }}>
+                    {phrases.map((p) => (
+                      <Box component="li" key={p.id} sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2, py: 1, borderBottom: 1, borderColor: "divider" }}>
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography variant="body1" lang="en" sx={{ fontWeight: 600 }}>{p.text_en}</Typography>
+                          <Typography variant="body2" color="text.secondary">{p.text_ja}</Typography>
+                        </Box>
+                        {renderSpeakButton(p.text_en, speakingId === p.id, () => speak(p))}
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              )}
+              {dialogues.length > 0 && (
+                <Box component="section" aria-labelledby="recap-dialogues-title">
+                  <Typography id="recap-dialogues-title" variant="subtitle1" component="h3" sx={{ fontWeight: 600, mb: 1 }}>
+                    対話
+                  </Typography>
+                  <Box component="ul" sx={{ listStyle: "none", m: 0, p: 0 }}>
+                    {dialogues.map((d) => (
+                      <Box component="li" key={d.id} sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2, py: 1, borderBottom: 1, borderColor: "divider" }}>
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                            <Box component="span" sx={{ color: "text.secondary", mr: 1 }}>{d.speaker}:</Box>
+                            <span lang="en">{d.line_en}</span>
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">{d.line_ja}</Typography>
+                        </Box>
+                        {renderSpeakButton(d.line_en, speakingDialogueId === d.id, () => speakDialogue(d))}
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              )}
             </Box>
           )}
         </CardContent>
       </Card>
 
-      {/* ナビゲーション */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
-        <Button disabled={currentStep === 0 || finished} onClick={handleBack}>前へ</Button>
-        <Box>
-          {currentStep === lastStep ? (
-            <Button variant="contained" onClick={handleComplete} startIcon={<CheckIcon />} disabled={finished}>
-              {saving ? '保存中...' : finished ? '完了しました' : 'レッスン完了'}
+      {finished ? (
+        // 完了後の案内（次の学習先・シーン・学習履歴へ）
+        <Paper component="section" aria-labelledby="lesson-complete-title" elevation={0} sx={{ mt: 3, p: { xs: 2.5, sm: 3 }, bgcolor: "primary.main", color: "primary.contrastText" }}>
+          <Typography id="lesson-complete-title" ref={completionHeadingRef} tabIndex={-1} variant="h6" component="h2" sx={{ outline: "none", display: "flex", alignItems: "center", gap: 1 }}>
+            <CheckIcon aria-hidden="true" />
+            レッスンを完了しました
+          </Typography>
+          <Typography variant="body2" sx={{ mt: 0.5, color: "#dbeafe" }}>
+            {saving ? "学習履歴に保存しています..." : "お疲れさまでした。続けて学習を進めましょう。"}
+          </Typography>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ mt: 2 }}>
+            {nextTarget && (
+              <Button
+                component={RouterLink}
+                to={nextTarget.path}
+                variant="contained"
+                endIcon={<ArrowForwardIcon />}
+                aria-label={`${nextTarget.kind === "lesson" ? "次のレッスンへ" : "次のシーンへ"}: ${nextTarget.title}`}
+                sx={{ minHeight: 44, bgcolor: "common.white", color: "primary.main", "&:hover": { bgcolor: "#e5edf7" } }}
+              >
+                {nextTarget.kind === "lesson" ? "次のレッスンへ" : "次のシーンへ"}
+              </Button>
+            )}
+            <Button component={RouterLink} to={backPath} variant="outlined" color="inherit" startIcon={<ArrowBackIcon />} sx={{ minHeight: 44, borderColor: "rgba(255,255,255,0.5)" }}>
+              シーンに戻る
             </Button>
-          ) : (
-            <Button variant="contained" onClick={handleNext}>次へ</Button>
-          )}
+            <Button component={RouterLink} to="/progress" variant="outlined" color="inherit" startIcon={<TrendingUpIcon />} sx={{ minHeight: 44, borderColor: "rgba(255,255,255,0.5)" }}>
+              学習履歴を見る
+            </Button>
+          </Stack>
+        </Paper>
+      ) : (
+        // ナビゲーション
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
+          <Button disabled={currentStep === 0} onClick={handleBack} sx={{ minHeight: 44 }}>前へ</Button>
+          <Box>
+            {currentStep === lastStep ? (
+              <Button variant="contained" onClick={handleComplete} startIcon={<CheckIcon />} sx={{ minHeight: 44 }}>
+                レッスン完了
+              </Button>
+            ) : (
+              <Button variant="contained" onClick={handleNext} sx={{ minHeight: 44 }}>次へ</Button>
+            )}
+          </Box>
         </Box>
+      )}
+
+      {/* 読み上げの状態を支援技術に伝える */}
+      <Box role="status" aria-live="polite" sx={visuallyHidden}>
+        {speakingId !== null || speakingDialogueId !== null ? "読み上げ中" : ""}
       </Box>
 
-      <Snackbar open={!!notice} autoHideDuration={notice?.severity === 'warning' ? NAVIGATE_DELAY_WARNING_MS : NAVIGATE_DELAY_MS} onClose={() => setNotice(null)}>
+      <Snackbar open={!!notice} autoHideDuration={notice?.severity === 'warning' ? NOTICE_DURATION_WARNING_MS : NOTICE_DURATION_MS} onClose={() => setNotice(null)}>
         <Alert severity={notice?.severity ?? 'success'} variant="filled" sx={{ width: '100%' }}>
           {notice?.message}
         </Alert>
       </Snackbar>
-    </Container>
+    </Box>
   );
 };
 

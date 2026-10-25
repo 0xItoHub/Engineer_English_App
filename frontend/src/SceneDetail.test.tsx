@@ -1,5 +1,5 @@
 import { vi, type Mocked } from 'vitest';
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import axios from 'axios';
 import SceneDetail from './SceneDetail';
@@ -48,8 +48,15 @@ test('シーンのレッスン一覧と、レッスンごとの完了状況を�
   expect(screen.getByText('レッスン (2)')).toBeInTheDocument();
   expect(screen.getByText('Yesterday I worked on...')).toBeInTheDocument();
   expect(document.title).toBe('Daily Standup | Engineer English App');
+  // パンくずリスト（ホーム › シーン）
+  const breadcrumbs = screen.getByRole('navigation', { name: 'パンくずリスト' });
+  expect(within(breadcrumbs).getByRole('link', { name: 'ホーム' })).toHaveAttribute('href', '/');
+  expect(within(breadcrumbs).getByText('Daily Standup')).toHaveAttribute('aria-current', 'page');
   expect(screen.getByLabelText('Yesterday I worked on...: 完了')).toHaveTextContent('完了');
   expect(screen.getByLabelText('Blockers: 未学習')).toHaveTextContent('未学習');
+  // 完了したレッスンは「復習する」、未学習のレッスンは「開始」で案内する
+  expect(screen.getByRole('button', { name: 'Yesterday I worked on... を復習する' })).toHaveTextContent('復習する');
+  expect(screen.getByRole('button', { name: 'Blockers を開始' })).toHaveTextContent('開始');
   // スコア（％）は表示しない
   expect(screen.queryByText(/%/)).not.toBeInTheDocument();
   expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();

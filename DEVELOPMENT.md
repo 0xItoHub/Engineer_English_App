@@ -150,3 +150,4 @@ pre-commit run --all-files   # 初回や設定変更時に全ファイルへ実�
    - Lambda のイメージ URI などの値は `infra/terraform.tfvars` で指定します（コミットしません）
 4. Django の `SECRET_KEY` は SSM Parameter Store の SecureString に保存し、Lambda からはパラメータ名（`DJANGO_SECRET_KEY_SSM_PARAM`）で参照します
 5. データベース（Aurora DSQL）のテーブル作成と学習データの投入は、Lambda の直接呼び出し（`{"manage":"migrate"}` / `{"manage":"seed"}`）で行います（[README](README.md) の「データベースの初期化」）
+6. フロントエンドは `npm run build` の結果を S3 にアップロードします。ハッシュ付きのアセットは長期キャッシュ、`index.html` は `no-cache` を指定します（手順は [frontend/README.md](frontend/README.md) の「ビルドとデプロイ」）
