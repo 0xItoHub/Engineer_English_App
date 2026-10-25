@@ -91,3 +91,28 @@ class UserProgress(models.Model):
     def __str__(self):
         completed = self.completed_at.strftime("%Y-%m-%d")
         return f"{self.username or self.user_sub} - {self.lesson.title} ({completed})"
+
+
+class ChatUsage(models.Model):
+    """AI チャットの日ごとの利用回数（ユーザー単位、および全体の合計）。
+
+    チャットの内容は保存せず、回数のみを記録する。
+    日付は日本時間（Asia/Tokyo）で区切る。全体の合計は user_sub="__global__" の行に記録する。
+    """
+
+    GLOBAL_SUB = "__global__"
+
+    user_sub = models.CharField(max_length=255)
+    date = models.DateField()
+    count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user_sub", "date"], name="core_chatusage_unique_user_date"
+            )
+        ]
+        ordering = ["-date", "user_sub"]
+
+    def __str__(self):
+        return f"{self.user_sub} {self.date}: {self.count}"

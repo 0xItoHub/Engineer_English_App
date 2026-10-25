@@ -148,7 +148,7 @@ function App() {
 
             {/* フッター */}
             <SiteFooter />
-            {/* 右下の AI チャット（デモ。画面は最初に開いたときに読み込む） */}
+            {/* 右下の AI チャット（設定で有効化。画面は最初に開いたときに読み込む） */}
             <ErrorBoundary>
               <ChatWidget />
             </ErrorBoundary>
