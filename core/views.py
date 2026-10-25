@@ -1,5 +1,6 @@
 import os
 
+from django.db.models import Prefetch
 from django.shortcuts import redirect
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
@@ -54,8 +55,13 @@ class LessonSceneFilterMixin:
 
 # 学習コンテンツは読み取り専用で公開する（内容は seed コマンドで投入・更新する）
 class SceneViewSet(viewsets.ReadOnlyModelViewSet):
-    # ネストしたフレーズ・対話・レッスンをまとめて取得し、シーン数に依存しないクエリ数にする
-    queryset = Scene.objects.prefetch_related("phrases", "dialogues", "lessons")
+    # ネストしたフレーズ・対話・レッスンをまとめて取得し、シーン数に依存しないクエリ数にする。
+    # ネストした一覧も並び順を明示して、応答の順序を一定にする
+    queryset = Scene.objects.prefetch_related(
+        Prefetch("phrases", queryset=Phrase.objects.order_by("id")),
+        Prefetch("dialogues", queryset=Dialogue.objects.order_by("order", "id")),
+        Prefetch("lessons", queryset=Lesson.objects.order_by("id")),
+    )
     serializer_class = SceneSerializer
 
 
@@ -76,7 +82,10 @@ class LessonViewSet(viewsets.ReadOnlyModelViewSet):
         qs = super().get_queryset()
         # 詳細取得ではレッスン内のフレーズ・対話をまとめて取得する
         if getattr(self, "action", None) == "retrieve":
-            qs = qs.prefetch_related("lesson_phrases", "lesson_dialogues")
+            qs = qs.prefetch_related(
+                Prefetch("lesson_phrases", queryset=Phrase.objects.order_by("id")),
+                Prefetch("lesson_dialogues", queryset=Dialogue.objects.order_by("order", "id")),
+            )
         return qs
 
     def get_serializer_class(self):

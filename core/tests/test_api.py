@@ -374,3 +374,56 @@ def test_home_redirect_ignores_query_parameters(client, monkeypatch):
     res = client.get("/?next=https://evil.example/")
 
     assert res["Location"] == "https://frontend.example/"
+
+
+# --- 並び順 -----------------------------------------------------------------
+
+
+@pytest.mark.parametrize("resource", ["scenes", "lessons", "phrases", "dialogues"])
+def test_list_queries_are_ordered(api_client, db, resource):
+    make_scene_with_content("First", lessons=2)
+    make_scene_with_content("Second", lessons=2)
+
+    with CaptureQueriesContext(connection) as ctx:
+        res = api_client.get(f"/api/{resource}/")
+
+    assert res.status_code == 200
+    # 一覧・ネストした一覧の取得クエリはすべて並び順を指定する
+    assert ctx.captured_queries
+    assert all("ORDER BY" in q["sql"] for q in ctx.captured_queries)
+
+
+def test_scene_nested_lists_are_sorted(api_client, scene):
+    lesson_a = make_lesson(scene, title="A")
+    lesson_b = make_lesson(scene, title="B")
+    phrases = [make_phrase(lesson=lesson_a, text_en=f"p{i}") for i in range(3)]
+    # 表示順（order）を優先し、同じ order の場合は ID 順に並べる
+    late = make_dialogue(lesson=lesson_a, order=2)
+    tie_first = make_dialogue(lesson=lesson_b, order=1)
+    tie_second = make_dialogue(lesson=lesson_b, order=1)
+
+    body = api_client.get(f"/api/scenes/{scene.id}/").json()
+
+    assert [lesson["id"] for lesson in body["lessons"]] == [lesson_a.id, lesson_b.id]
+    assert [p["id"] for p in body["phrases"]] == [p.id for p in phrases]
+    assert [d["id"] for d in body["dialogues"]] == [tie_first.id, tie_second.id, late.id]
+
+
+def test_lesson_detail_dialogues_are_sorted(api_client, lesson):
+    second = make_dialogue(lesson=lesson, order=2)
+    first = make_dialogue(lesson=lesson, order=1)
+
+    body = api_client.get(f"/api/lessons/{lesson.id}/").json()
+
+    assert [d["id"] for d in body["lesson_dialogues"]] == [first.id, second.id]
+
+
+def test_progress_list_is_newest_first(auth_client, user, scene):
+    older = make_progress(user, make_lesson(scene, title="Old"))
+    newer = make_progress(user, make_lesson(scene, title="New"))
+    # 完了日時が同じ場合は ID の降順に並べる
+    UserProgress.objects.update(completed_at=older.completed_at)
+
+    body = auth_client.get("/api/progress/").json()
+
+    assert [p["id"] for p in body] == [newer.id, older.id]
