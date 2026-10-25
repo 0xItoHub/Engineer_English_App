@@ -287,7 +287,8 @@ test('シーンの取得に失敗してもレッスンを表示し、レッス�
   });
   renderLessonDetail();
 
-  fireEvent.click(await screen.findByRole('button', { name: 'シーンに戻る' }));
+  const breadcrumbs = await screen.findByRole('navigation', { name: 'パンくずリスト' });
+  fireEvent.click(within(breadcrumbs).getByRole('link', { name: 'シーン' }));
   expect(screen.getByText('scene page')).toBeInTheDocument();
 });
 
@@ -371,6 +372,10 @@ test('「次のレッスンへ」で同じシーンの次のレッスンを最�
 
   const panel = await completeCurrentLesson();
   const next = await within(panel).findByRole('link', { name: '次のレッスンへ: Blockers' });
+  // パンくずリスト（ホーム › シーン › レッスン）
+  const breadcrumbs = screen.getByRole('navigation', { name: 'パンくずリスト' });
+  expect(within(breadcrumbs).getByRole('link', { name: 'Daily Standup' })).toHaveAttribute('href', '/scene/1');
+  expect(within(breadcrumbs).getByText('Daily report')).toHaveAttribute('aria-current', 'page');
   expect(next).toHaveAttribute('href', '/lesson/6');
   fireEvent.click(next);
 

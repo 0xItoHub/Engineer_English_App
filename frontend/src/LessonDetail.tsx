@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { useParams, useNavigate, Link as RouterLink } from "react-router";
+import { useParams, Link as RouterLink } from "react-router";
 import {
   Card,
   CardContent,
@@ -39,6 +39,7 @@ import { parseId } from "./lib/params";
 import { isNotFoundError, queryView } from "./lib/queryState";
 import { usePageTitle } from "./hooks/usePageTitle";
 import NotFound from "./components/NotFound";
+import PageBreadcrumbs from "./components/PageBreadcrumbs";
 import { LoadingView, QueryErrorAlert } from "./components/QueryStatus";
 import { pushLocalProgress, readSpeechRate, removeLocalProgressEntry, writeLastLesson, writeSpeechRate } from "./lib/storage";
 import { visuallyHidden } from "./lib/a11y";
@@ -90,7 +91,6 @@ const LessonDetail: React.FC = () => {
 };
 
 const LessonContent: React.FC<{ lessonId: string | undefined }> = ({ lessonId }) => {
-  const navigate = useNavigate();
   const { isAuthenticated, sub } = useAppAuth();
   // ID の形式が正しくない場合は取得せず「見つかりません」を表示する
   const lessonNumber = parseId(lessonId);
@@ -348,6 +348,8 @@ const LessonContent: React.FC<{ lessonId: string | undefined }> = ({ lessonId })
   const progress = Math.min(100, Math.max(0, (currentStep / lastStep) * 100));
   const backPath = Number.isSafeInteger(lesson.scene) && lesson.scene > 0 ? `/scene/${lesson.scene}` : "/";
   const nextTarget = findNextTarget(scenesQuery.data, lesson.scene, lesson.id);
+  // パンくずリストのシーン名（シーン一覧を取得できない場合は「シーン」と表示する）
+  const sceneTitle = scenesQuery.data?.find((s) => s.id === lesson.scene)?.title ?? "シーン";
   const phrases = lesson.lesson_phrases ?? [];
   const dialogues = lesson.lesson_dialogues ?? [];
   // ステップの見出し（切り替え時にフォーカスを移す）
@@ -365,9 +367,7 @@ const LessonContent: React.FC<{ lessonId: string | undefined }> = ({ lessonId })
     <Box>
       {/* ヘッダー */}
       <Box sx={{ mb: 3 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(backPath)} sx={{ mb: 2 }}>
-          シーンに戻る
-        </Button>
+        <PageBreadcrumbs items={[{ label: sceneTitle, to: backPath }, { label: lesson.title }]} />
         <Paper elevation={0} sx={{ p: 3, backgroundColor: "#f5f5f5" }}>
           <Typography variant="h4" component="h1" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <MenuBookIcon color="primary" fontSize="large" aria-hidden="true" />

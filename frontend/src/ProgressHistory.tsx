@@ -18,7 +18,6 @@ import {
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import { 
-  ArrowBack as ArrowBackIcon,
   School as SchoolIcon,
   CollectionsBookmark as CollectionsBookmarkIcon,
   CheckCircle as CheckCircleIcon,
@@ -30,6 +29,7 @@ import { queryView } from "./lib/queryState";
 import { useLearningProgress } from "./hooks/useLearningProgress";
 import { usePageTitle } from "./hooks/usePageTitle";
 import { LoadingView, QueryErrorAlert } from "./components/QueryStatus";
+import PageBreadcrumbs from "./components/PageBreadcrumbs";
 
 type Progress = {
   id?: number;
@@ -118,9 +118,7 @@ const ProgressHistory: React.FC = () => {
     // 幅と余白はメイン領域（App の Container）に合わせる
     <Box>
       <Box sx={{ mb: 3 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/")} sx={{ mb: 2 }}>
-          ホームに戻る
-        </Button>
+        <PageBreadcrumbs items={[{ label: "学習履歴" }]} />
         <Paper elevation={0} sx={{ p: 3, backgroundColor: "#f5f5f5" }}>
           <Typography variant="h4" component="h1" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <BarChartIcon color="primary" fontSize="large" aria-hidden="true" />

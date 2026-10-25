@@ -15,7 +15,6 @@ import {
 } from "@mui/material";
 import { 
   PlayArrow as PlayIcon,
-  ArrowBack as ArrowBackIcon,
   School as SchoolIcon,
   CheckCircle as CheckCircleIcon,
   Replay as ReplayIcon,
@@ -28,6 +27,7 @@ import { isNotFoundError, queryView } from "./lib/queryState";
 import { useLearningProgress } from "./hooks/useLearningProgress";
 import { usePageTitle } from "./hooks/usePageTitle";
 import NotFound from "./components/NotFound";
+import PageBreadcrumbs from "./components/PageBreadcrumbs";
 import { LoadingView, ProgressErrorAlert, QueryErrorAlert } from "./components/QueryStatus";
 
 const PAGE_SIZE = 5;
@@ -91,9 +91,7 @@ const SceneDetail: React.FC = () => {
     <Box>
       {/* ヘッダー */}
       <Box sx={{ mb: 3 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/")} sx={{ mb: 2 }}>
-          ホームに戻る
-        </Button>
+        <PageBreadcrumbs items={[{ label: scene.title }]} />
         <Paper elevation={0} sx={{ p: 3, backgroundColor: "#f5f5f5" }}>
           <Typography variant="h4" component="h1" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <MenuBookIcon color="primary" fontSize="large" aria-hidden="true" />
