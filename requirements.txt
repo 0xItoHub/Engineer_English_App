@@ -1,12 +1,12 @@
 # 依存バージョンを固定（更新は Dependabot 等で管理）
-Django==5.2.18
+Django==5.2.19
 djangorestframework==3.18.3
 django-cors-headers==4.9.0
 mangum==0.22.0
 # Aurora DSQL への接続（IAM 認証トークンの生成はアダプタとコネクタが行う）
 aurora-dsql-django==0.7.0
 aurora-dsql-python-connector[psycopg]==0.2.7
-psycopg[binary]==3.3.6
+psycopg[binary]==3.3.8
 psycopg-pool==3.3.3
 # Cognito のアクセストークン（JWT）の署名検証
 PyJWT[crypto]==2.15.1
